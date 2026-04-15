@@ -1,9 +1,11 @@
 pub mod create;
 pub mod delete;
+pub mod group;
 pub mod list;
 pub mod rdp;
 pub mod show;
 pub mod ssh;
 pub mod tunnel;
 pub mod update;
+pub mod vm;
 pub mod wait;

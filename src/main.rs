@@ -1,4 +1,5 @@
 mod api_client;
+mod arm_client;
 mod auth;
 mod commands;
 mod models;
@@ -55,6 +56,16 @@ enum CliCommand {
         command: AccountCommand,
     },
 
+    Group {
+        #[command(subcommand)]
+        command: GroupCommand,
+    },
+
+    Vm {
+        #[command(subcommand)]
+        command: VmCommand,
+    },
+
     Network {
         #[command(subcommand)]
         command: NetworkCommand,
@@ -64,6 +75,45 @@ enum CliCommand {
 #[derive(Subcommand)]
 enum AccountCommand {
     Show,
+}
+
+#[derive(Subcommand)]
+enum GroupCommand {
+    List,
+    Show {
+        #[arg(short, long)]
+        name: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum VmCommand {
+    List {
+        #[arg(short, long)]
+        resource_group: Option<String>,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+    },
+    Start {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+    },
+    Stop {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long)]
+        no_wait: bool,
+        #[arg(long)]
+        skip_shutdown: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -323,12 +373,72 @@ async fn main() -> anyhow::Result<()> {
             }
         },
 
+        CliCommand::Group { command } => {
+            handle_group(command, output_format, subscription).await
+        }
+
+        CliCommand::Vm { command } => {
+            handle_vm(command, output_format, subscription).await
+        }
+
         CliCommand::Network { command } => match command {
             NetworkCommand::Bastion { command } => {
                 handle_bastion(command, output_format, subscription).await?;
                 Ok(())
             }
         },
+    }
+}
+
+async fn handle_group(
+    cmd: GroupCommand,
+    output_format: OutputFormat,
+    subscription: Option<String>,
+) -> anyhow::Result<()> {
+    let mut provider = auth::TokenProvider::load(subscription)?;
+    let access_token = provider.get_access_token().await?;
+    let subscription_id = provider.get_subscription_id_or_fallback().await?;
+
+    let client = arm_client::ArmClient::new(access_token, subscription_id);
+
+    match cmd {
+        GroupCommand::List => {
+            let value = commands::group::list::execute(&client).await?;
+            output::print_output(&value, output_format)
+        }
+        GroupCommand::Show { name } => {
+            let value = commands::group::show::execute(&client, &name).await?;
+            output::print_output(&value, output_format)
+        }
+    }
+}
+
+async fn handle_vm(
+    cmd: VmCommand,
+    output_format: OutputFormat,
+    subscription: Option<String>,
+) -> anyhow::Result<()> {
+    let mut provider = auth::TokenProvider::load(subscription)?;
+    let access_token = provider.get_access_token().await?;
+    let subscription_id = provider.get_subscription_id_or_fallback().await?;
+
+    let client = arm_client::ArmClient::new(access_token, subscription_id);
+
+    match cmd {
+        VmCommand::List { resource_group } => {
+            let value = commands::vm::list::execute(&client, resource_group.as_deref()).await?;
+            output::print_output(&value, output_format)
+        }
+        VmCommand::Show { name, resource_group } => {
+            let value = commands::vm::show::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format)
+        }
+        VmCommand::Start { name, resource_group } => {
+            commands::vm::start::execute(&client, &resource_group, &name).await
+        }
+        VmCommand::Stop { name, resource_group, no_wait, skip_shutdown } => {
+            commands::vm::stop::execute(&client, &resource_group, &name, no_wait, skip_shutdown).await
+        }
     }
 }
 

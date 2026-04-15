@@ -189,7 +189,10 @@ fn pick_table_columns(sample: &serde_json::Value) -> Vec<String> {
     let preferred = [
         "name",
         "location",
+        "resourceGroup",
+        "provisioningState",
         "properties.provisioningState",
+        "hardwareProfile.vmSize",
         "sku.name",
         "properties.dnsName",
     ];

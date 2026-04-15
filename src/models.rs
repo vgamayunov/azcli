@@ -134,3 +134,153 @@ pub enum OutputFormat {
     Yamlc,
     None,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourceGroup {
+    pub id: Option<String>,
+    pub name: String,
+    pub location: String,
+    #[serde(rename = "type")]
+    pub resource_type: Option<String>,
+    pub properties: Option<ResourceGroupProperties>,
+    pub tags: Option<HashMap<String, String>>,
+    #[serde(rename = "managedBy")]
+    pub managed_by: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceGroupProperties {
+    pub provisioning_state: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VirtualMachine {
+    pub id: Option<String>,
+    pub name: String,
+    pub location: Option<String>,
+    #[serde(rename = "type")]
+    pub resource_type: Option<String>,
+    pub zones: Option<Vec<String>>,
+    pub tags: Option<HashMap<String, String>>,
+    pub identity: Option<serde_json::Value>,
+    pub plan: Option<serde_json::Value>,
+    pub properties: Option<VmProperties>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VmProperties {
+    pub provisioning_state: Option<String>,
+    pub vm_id: Option<String>,
+    pub hardware_profile: Option<VmHardwareProfile>,
+    pub storage_profile: Option<VmStorageProfile>,
+    pub os_profile: Option<VmOsProfile>,
+    pub network_profile: Option<VmNetworkProfile>,
+    pub priority: Option<String>,
+    pub time_created: Option<String>,
+    pub instance_view: Option<VmInstanceView>,
+}
+
+impl VirtualMachine {
+    pub fn to_flattened_value(&self) -> serde_json::Value {
+        let mut map = serde_json::Map::new();
+
+        if let Some(id) = &self.id {
+            map.insert("id".into(), serde_json::Value::String(id.clone()));
+        }
+        map.insert("name".into(), serde_json::Value::String(self.name.clone()));
+        if let Some(loc) = &self.location {
+            map.insert("location".into(), serde_json::Value::String(loc.clone()));
+        }
+        if let Some(t) = &self.resource_type {
+            map.insert("type".into(), serde_json::Value::String(t.clone()));
+        }
+        if let Some(zones) = &self.zones {
+            map.insert(
+                "zones".into(),
+                serde_json::to_value(zones).unwrap_or_default(),
+            );
+        }
+        if let Some(tags) = &self.tags {
+            map.insert(
+                "tags".into(),
+                serde_json::to_value(tags).unwrap_or_default(),
+            );
+        }
+        if let Some(identity) = &self.identity {
+            map.insert("identity".into(), identity.clone());
+        }
+        if let Some(plan) = &self.plan {
+            map.insert("plan".into(), plan.clone());
+        }
+
+        if let Some(props) = &self.properties {
+            if let Ok(serde_json::Value::Object(props_map)) = serde_json::to_value(props) {
+                for (k, v) in props_map {
+                    map.insert(k, v);
+                }
+            }
+        }
+
+        if let Some(id) = &self.id {
+            if let Some(rg) = extract_resource_group(id) {
+                map.insert("resourceGroup".into(), serde_json::Value::String(rg));
+            }
+        }
+
+        serde_json::Value::Object(map)
+    }
+}
+
+fn extract_resource_group(id: &str) -> Option<String> {
+    let lower = id.to_lowercase();
+    let idx = lower.find("/resourcegroups/")?;
+    let after = &id[idx + "/resourcegroups/".len()..];
+    Some(after.split('/').next()?.to_string())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VmHardwareProfile {
+    pub vm_size: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VmStorageProfile {
+    pub image_reference: Option<serde_json::Value>,
+    pub os_disk: Option<serde_json::Value>,
+    pub data_disks: Option<Vec<serde_json::Value>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VmOsProfile {
+    pub computer_name: Option<String>,
+    pub admin_username: Option<String>,
+    pub linux_configuration: Option<serde_json::Value>,
+    pub windows_configuration: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VmNetworkProfile {
+    pub network_interfaces: Option<Vec<SubResource>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VmInstanceView {
+    pub statuses: Option<Vec<VmInstanceViewStatus>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VmInstanceViewStatus {
+    pub code: Option<String>,
+    pub display_status: Option<String>,
+    pub level: Option<String>,
+    pub time: Option<String>,
+}
