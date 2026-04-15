@@ -111,8 +111,14 @@ enum VmCommand {
         resource_group: String,
         #[arg(long)]
         no_wait: bool,
+    },
+    Deallocate {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
         #[arg(long)]
-        skip_shutdown: bool,
+        no_wait: bool,
     },
 }
 
@@ -436,8 +442,11 @@ async fn handle_vm(
         VmCommand::Start { name, resource_group } => {
             commands::vm::start::execute(&client, &resource_group, &name).await
         }
-        VmCommand::Stop { name, resource_group, no_wait, skip_shutdown } => {
-            commands::vm::stop::execute(&client, &resource_group, &name, no_wait, skip_shutdown).await
+        VmCommand::Stop { name, resource_group, no_wait } => {
+            commands::vm::stop::execute(&client, &resource_group, &name, no_wait).await
+        }
+        VmCommand::Deallocate { name, resource_group, no_wait } => {
+            commands::vm::deallocate::execute(&client, &resource_group, &name, no_wait).await
         }
     }
 }

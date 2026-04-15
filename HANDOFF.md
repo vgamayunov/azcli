@@ -1,111 +1,138 @@
-# Session State — azcli (Rust Azure Bastion CLI)
+# Session State — azcli (Rust Azure CLI)
 
 ## Project Goal
 
-Build a complete Rust equivalent of the Azure CLI `az network bastion` extension (from Azure/azure-cli-extensions, src/bastion/, v1.4.3). All 9 commands implemented. SSH tunneling works end-to-end.
+Build a Rust equivalent of the Azure CLI, starting with the bastion extension and progressively adding core commands (login, group, vm). Native OAuth2 auth, no Python dependency for auth flow.
 
 ## Current Status: WORKING
 
-- **Build**: `cargo build` — 0 errors, 0 warnings
-- **SSH tunnel**: Tested and working against live Azure Bastion
-- **Test command**: `azcli network bastion ssh --name "azurebastion" --resource-group "access-hub-rg" --target-ip-address "10.1.20.110" --username victor.gamayunov --auth-type ssh-key --ssh-key ~/.ssh/id_rsa`
+- **Build**: `cargo build` — 0 errors (14 dead-code warnings from legacy bastion `execute()` fns)
+- **Last commit**: `67e0029` — `feat: add resource group and VM commands (list, show, start, stop)`
+- **All commands tested end-to-end against live Azure subscription**
+
+## Implemented Commands
+
+```
+azcli login [--use-device-code] [--service-principal --client-id --client-secret --tenant] [--identity [--client-id]]
+azcli logout
+azcli account show
+azcli group list [--resource-group RG] [-o table|json|jsonc|tsv|yaml|yamlc|none]
+azcli group show --name NAME [-o ...]
+azcli vm list [--resource-group RG] [-o ...]
+azcli vm show --name NAME --resource-group RG [-o ...]
+azcli vm start --name NAME --resource-group RG
+azcli vm stop --name NAME --resource-group RG [--no-wait] [--skip-shutdown]
+azcli network bastion {create|delete|list|show|update|ssh|rdp|tunnel|wait}
+```
+
+Global flags: `-o/--output` (json/jsonc/table/tsv/yaml/yamlc/none), `--subscription`
 
 ## Architecture
 
 ```
 src/
-├── main.rs           # CLI entry point (clap derive), all 9 command definitions + routing
-├── auth.rs           # Azure auth via `az account get-access-token` subprocess
-├── api_client.rs     # BastionClient — ARM API + bastion data plane (tokens, RDP, developer endpoint)
-├── models.rs         # BastionHost, TokenResponse, BastionSku, AuthType, etc.
-├── tunnel.rs         # TunnelServer — TCP listener, manual WebSocket handshake + raw frame I/O
+├── main.rs              # CLI entry (clap derive), command routing for all groups
+├── api_client.rs        # BastionClient — ARM API + bastion data plane
+├── arm_client.rs        # ArmClient — general ARM API client (group, vm methods)
+├── auth/
+│   ├── mod.rs           # Constants, OAuth structs, az CLI fallback
+│   ├── cache.rs         # TokenCache at ~/.azure/azcli_tokens.json
+│   ├── interactive.rs   # Browser auth code + PKCE
+│   ├── device_code.rs   # Device code polling
+│   ├── service_principal.rs  # client_credentials grant
+│   ├── managed_identity.rs   # IMDS endpoint
+│   └── token_provider.rs     # TokenProvider: wraps all flows, strip_subscription_prefix fix
+├── models.rs            # All ARM models (BastionHost, ResourceGroup, VirtualMachine, etc.)
+├── output.rs            # Format dispatch (json/jsonc/table/tsv/yaml/yamlc/none)
+├── tunnel.rs            # Manual WebSocket tunnel (raw frame I/O for Bastion)
 └── commands/
     ├── mod.rs
-    ├── create.rs     # PUT bastion host (all feature flags)
-    ├── delete.rs     # DELETE bastion host
-    ├── list.rs       # LIST by subscription or resource group
-    ├── show.rs       # GET single bastion host
-    ├── update.rs     # PATCH bastion host (all feature flags)
-    ├── ssh.rs        # SSH via bastion tunnel
-    ├── rdp.rs        # RDP via tunnel mode, web mode, or AAD
-    ├── tunnel.rs     # Generic TCP tunnel through bastion
-    └── wait.rs       # Poll provisioning state with configurable interval/timeout
+    ├── group/           # Resource group commands
+    │   ├── mod.rs
+    │   ├── list.rs
+    │   └── show.rs
+    ├── vm/              # Virtual machine commands
+    │   ├── mod.rs
+    │   ├── list.rs
+    │   ├── show.rs
+    │   ├── start.rs
+    │   └── stop.rs
+    ├── create.rs        # bastion create
+    ├── delete.rs        # bastion delete
+    ├── list.rs          # bastion list
+    ├── show.rs          # bastion show
+    ├── update.rs        # bastion update
+    ├── ssh.rs           # bastion ssh
+    ├── rdp.rs           # bastion rdp
+    ├── tunnel.rs        # bastion tunnel
+    └── wait.rs          # bastion wait
 ```
 
 ## Key Technical Decisions
 
+### Auth: Fully manual OAuth2 with reqwest (no azure_identity crate)
+- Oracle consultation decided: go manual for full control, smaller binary, no dependency sprawl
+- Client ID: `04b07795-8ddb-461a-bbee-02f9e1bf7b46` (Azure CLI well-known public client)
+- Scope: `https://management.azure.com/.default`
+- Token cache: `~/.azure/azcli_tokens.json` with refresh support
+- Bastion commands fall back to `az account get-access-token` when not logged in via azcli
+
+### ARM API: Properties flattening for VM output
+The ARM API nests VM fields under `properties` (hardwareProfile, provisioningState, vmId, etc.).
+`VirtualMachine` model deserializes the raw structure, then `to_flattened_value()` produces
+az-cli-compatible flattened JSON (properties promoted to top level, resourceGroup extracted from id).
+
+### Critical bug fix: subscription ID prefix stripping
+ARM `/subscriptions` API returns IDs as `/subscriptions/{guid}`. We stored verbatim, causing
+double-prefixed URLs (`/subscriptions//subscriptions/{guid}/...`) → 400 errors.
+Fixed with `strip_subscription_prefix()` in `token_provider.rs`.
+
 ### Raw WebSocket Implementation (tunnel.rs)
-We do NOT use tungstenite. Azure Bastion's WebSocket server has two non-compliance issues:
-1. Sometimes omits `Upgrade: websocket` and `Connection: Upgrade` in 101 response
-2. Sets RSV1 bit on frames (permessage-deflate indicator) without negotiation
+Azure Bastion's WebSocket server is non-compliant (missing upgrade headers, RSV1 bit set without negotiation).
+Custom raw frame implementation instead of tungstenite.
 
-Our implementation:
-- Manual TLS connection via `tokio-rustls` + `webpki-roots`
-- Raw HTTP upgrade request with `Sec-WebSocket-Key` from UUID v4
-- Byte-level HTTP response parsing (scan for `\r\n\r\n`)
-- Lenient 101 validation (warns on missing headers, proceeds anyway)
-- Custom `WsReader` / `WsWriter` for raw WebSocket frame I/O (ignores RSV bits)
-- Detection of HTTP responses masquerading as WebSocket frames (Bastion proxy edge case)
-
-### Auth
-Uses `az account get-access-token` subprocess. The access token is passed as an `aztoken` form field to the bastion `/api/tokens` endpoint (NOT as a Bearer header — matches Python implementation).
-
-### Token Flow
-1. `az account get-access-token` → ARM bearer token
-2. GET bastion host via ARM API → extract `dnsName` (bastion endpoint), SKU
-3. POST `https://{bastion_endpoint}/api/tokens` with form data (resourceId, protocol, workloadHostPort, aztoken) → returns authToken, nodeId, websocketToken
-4. WebSocket upgrade to `wss://{bastion_endpoint}/webtunnelv2/{websocketToken}?X-Node-Id={nodeId}`
-5. Bidirectional TCP ↔ WebSocket binary frame relay
+### Table output column selection (output.rs)
+`pick_table_columns()` checks for preferred fields in order:
+name, location, resourceGroup, provisioningState, properties.provisioningState, hardwareProfile.vmSize, sku.name, properties.dnsName.
+Falls back to first 6 keys if none match.
 
 ## Azure Test Environment
 - Bastion: `azurebastion` in RG `access-hub-rg`
 - Subscription: `62118f5c-be37-400f-9f20-a8b77a2a7877`
-- Bastion endpoint: `bst-456e5bde-f503-4d2f-8f22-c5846b1a8319.bastion.azure.com`
 - Target VM: IP `10.1.20.110`, port 22, user `victor.gamayunov`, SSH key `~/.ssh/id_rsa`
-- SKU: Standard (uses `/webtunnelv2/` URL pattern; Developer/QuickConnect use `/omni/webtunnel/`)
+- SKU: Standard (uses `/webtunnelv2/` URL pattern)
+
+## Commit History
+- `97d6de8` — feat: Rust Azure CLI with bastion extension and -o output format support
+- `a0a0b47` — feat: add native OAuth2 login and fix subscription ID prefix from ARM API
+- `67e0029` — feat: add resource group and VM commands (list, show, start, stop)
 
 ## Known Issues
-
-### Azure Bastion Server Instability
-The bastion server intermittently:
-- Returns HTTP 101 from proxy layer, then immediately sends raw `HTTP/1.1 400 Bad Request` (Tomcat error page) instead of WebSocket frames — proxy upgraded but backend rejected
-- Hangs after 101 without sending any data
-- Works correctly when the request reaches a healthy backend node
-
-The Python `az` CLI exhibits the same failures during these periods. Not a client bug.
-
-### No Retry Logic Yet
-When bastion returns proxy-101-then-400, the connection fails immediately. A retry mechanism with backoff would improve resilience.
+- 14 dead-code warnings from old bastion `execute()` functions (cosmetic, can clean up)
+- `vm stop` defaults to `deallocate` (releases compute billing); `az vm stop` defaults to `powerOff`. Exposed via `--skip-shutdown` flag but semantics differ from az cli where `az vm stop` = powerOff and `az vm deallocate` = deallocate. May want a separate `vm deallocate` command.
+- Azure Bastion server intermittently returns proxy-101-then-400 (not a client bug, Python az CLI has same issue)
+- No retry logic for WebSocket connection failures
 
 ## Dependencies
 ```toml
 clap = "4"                  # CLI framework
 tokio = "1"                 # Async runtime
 reqwest = "0.12"            # HTTP client (rustls-tls)
-serde = "1"                 # Serialization
-serde_json = "1"
-tracing = "0.1"             # Logging
-tracing-subscriber = "0.3"
-anyhow = "1"                # Error handling
-thiserror = "2"
-url = "2"                   # URL parsing
-base64 = "0.22"             # WebSocket key encoding
-uuid = "1"                  # WebSocket key + mask generation
-tokio-rustls = "0.26"       # TLS for WebSocket
-rustls = "0.23"             # TLS config (aws-lc-rs backend)
-webpki-roots = "1"          # Root CA certificates
-which = "7"                 # Find ssh/mstsc executables
+serde/serde_json/serde_yaml # Serialization
+tracing/tracing-subscriber  # Logging
+anyhow/thiserror            # Error handling
+tokio-rustls/rustls/webpki-roots  # TLS for WebSocket
+base64/uuid/url/which       # Utilities
+sha2/dirs/open/chrono       # Auth module deps
 ```
 
 ## What's Left (Future Work)
-- Retry logic for WebSocket connection failures (with exponential backoff)
+- `vm deallocate` as separate command (match az cli semantics)
+- Pagination support for list APIs (currently returns first page only)
+- Retry logic for WebSocket connection failures
 - Tests (unit + integration)
-- RDP command end-to-end testing (tunnel mode implemented but untested)
-- Developer SKU endpoint support (`/api/connection` → `/omni/webtunnel/`)
+- RDP command end-to-end testing
+- Developer SKU endpoint support
 - `--no-wait` flag for create/update/delete
-- Better error messages for common failures (expired token, wrong SKU, etc.)
-- Release build optimization
-
-## Reference
-- Python source: `azure-cli-extensions` repo, `src/bastion/azext_bastion/`, v1.4.3, commit `a5cf595af28c418938f75ac84f30d90ff5c78ece`
-- The `azure-cli/` directory in this repo is a reference clone (not part of the build)
+- Clean up dead code warnings
+- Additional az commands (network, storage, etc.)
