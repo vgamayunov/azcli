@@ -18,6 +18,55 @@ pub async fn execute(
     timeout: Option<u64>,
 ) -> Result<()> {
     let client = Arc::new(BastionClient::new().await?);
+    execute_inner(
+        client,
+        resource_group,
+        bastion_name,
+        target_resource_id,
+        target_ip_address,
+        resource_port,
+        local_port,
+        timeout,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn execute_with_client(
+    client: &BastionClient,
+    resource_group: &str,
+    bastion_name: &str,
+    target_resource_id: Option<&str>,
+    target_ip_address: Option<&str>,
+    resource_port: u16,
+    local_port: u16,
+    timeout: Option<u64>,
+) -> Result<()> {
+    let client = Arc::new(client.clone());
+    execute_inner(
+        client,
+        resource_group,
+        bastion_name,
+        target_resource_id,
+        target_ip_address,
+        resource_port,
+        local_port,
+        timeout,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn execute_inner(
+    client: Arc<BastionClient>,
+    resource_group: &str,
+    bastion_name: &str,
+    target_resource_id: Option<&str>,
+    target_ip_address: Option<&str>,
+    resource_port: u16,
+    local_port: u16,
+    timeout: Option<u64>,
+) -> Result<()> {
     let bastion = client.show(resource_group, bastion_name).await?;
 
     let sku = bastion

@@ -20,6 +20,63 @@ pub async fn execute(
     extra_args: Vec<String>,
 ) -> Result<()> {
     let client = Arc::new(BastionClient::new().await?);
+    execute_inner(
+        client,
+        resource_group,
+        bastion_name,
+        auth_type,
+        target_resource_id,
+        target_ip_address,
+        resource_port,
+        username,
+        ssh_key,
+        extra_args,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn execute_with_client(
+    client: &BastionClient,
+    resource_group: &str,
+    bastion_name: &str,
+    auth_type: AuthType,
+    target_resource_id: Option<&str>,
+    target_ip_address: Option<&str>,
+    resource_port: u16,
+    username: Option<&str>,
+    ssh_key: Option<&str>,
+    extra_args: Vec<String>,
+) -> Result<()> {
+    let client = Arc::new(client.clone());
+    execute_inner(
+        client,
+        resource_group,
+        bastion_name,
+        auth_type,
+        target_resource_id,
+        target_ip_address,
+        resource_port,
+        username,
+        ssh_key,
+        extra_args,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn execute_inner(
+    client: Arc<BastionClient>,
+    resource_group: &str,
+    bastion_name: &str,
+    auth_type: AuthType,
+    target_resource_id: Option<&str>,
+    target_ip_address: Option<&str>,
+    resource_port: u16,
+    username: Option<&str>,
+    ssh_key: Option<&str>,
+    extra_args: Vec<String>,
+) -> Result<()> {
     let bastion = client.show(resource_group, bastion_name).await?;
 
     let sku = bastion.sku.as_ref().context("Bastion has no SKU")?.name;

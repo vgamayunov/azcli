@@ -45,3 +45,15 @@ which = "7"
 
 # YAML serialization (for -o yaml/yamlc output)
 serde_yaml = "0.9"
+
+# PKCE code verifier hashing
+sha2 = "0.10"
+
+# Home/config directory resolution
+dirs = "6"
+
+# Open browser for interactive login
+open = "5"
+
+# Chrono for token expiry timestamps
+chrono = { version = "0.4", features = ["serde", "clock"], default-features = false }

@@ -2,11 +2,11 @@ use anyhow::{Context, Result};
 use reqwest::Client;
 use tracing::debug;
 
-use crate::auth;
 use crate::models::*;
 
 const API_VERSION: &str = "2024-01-01";
 
+#[derive(Clone)]
 pub struct BastionClient {
     client: Client,
     subscription_id: String,
@@ -15,14 +15,22 @@ pub struct BastionClient {
 
 impl BastionClient {
     pub async fn new() -> Result<Self> {
-        let access_token = auth::get_access_token().await?;
-        let subscription_id = auth::get_subscription_id().await?;
+        let access_token = crate::auth::get_access_token_az_cli().await?;
+        let subscription_id = crate::auth::get_subscription_id_az_cli().await?;
 
         Ok(Self {
             client: Client::new(),
             subscription_id,
             access_token,
         })
+    }
+
+    pub fn with_token(access_token: String, subscription_id: String) -> Self {
+        Self {
+            client: Client::new(),
+            subscription_id,
+            access_token,
+        }
     }
 
     pub fn subscription_id(&self) -> &str {

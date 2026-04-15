@@ -14,7 +14,21 @@ pub async fn execute(
     timeout: u64,
 ) -> Result<()> {
     let client = BastionClient::new().await?;
+    execute_with_client(&client, resource_group, name, created, updated, deleted, exists, interval, timeout).await
+}
 
+#[allow(clippy::too_many_arguments)]
+pub async fn execute_with_client(
+    client: &BastionClient,
+    resource_group: &str,
+    name: &str,
+    created: bool,
+    updated: bool,
+    deleted: bool,
+    exists: bool,
+    interval: u64,
+    timeout: u64,
+) -> Result<()> {
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(timeout);
     let poll_interval = std::time::Duration::from_secs(interval);
 

@@ -19,16 +19,51 @@ struct Cli {
     #[arg(short = 'o', long = "output", value_enum, global = true, default_value_t = OutputFormat::Json)]
     output: OutputFormat,
 
+    #[arg(long = "subscription", global = true)]
+    subscription: Option<String>,
+
     #[command(subcommand)]
     command: CliCommand,
 }
 
 #[derive(Subcommand)]
 enum CliCommand {
+    Login {
+        #[arg(long)]
+        tenant: Option<String>,
+
+        #[arg(long)]
+        use_device_code: bool,
+
+        #[arg(long)]
+        service_principal: bool,
+
+        #[arg(long)]
+        client_id: Option<String>,
+
+        #[arg(long)]
+        client_secret: Option<String>,
+
+        #[arg(long)]
+        identity: bool,
+    },
+
+    Logout,
+
+    Account {
+        #[command(subcommand)]
+        command: AccountCommand,
+    },
+
     Network {
         #[command(subcommand)]
         command: NetworkCommand,
     },
+}
+
+#[derive(Subcommand)]
+enum AccountCommand {
+    Show,
 }
 
 #[derive(Subcommand)]
@@ -237,16 +272,77 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     let output_format = cli.output;
+    let subscription = cli.subscription;
+
     match cli.command {
+        CliCommand::Login {
+            tenant,
+            use_device_code,
+            service_principal,
+            client_id,
+            client_secret,
+            identity,
+        } => {
+            let mut provider = auth::TokenProvider::load(subscription)?;
+
+            if identity {
+                provider
+                    .login_managed_identity(client_id.as_deref())
+                    .await?;
+            } else if service_principal {
+                let tenant = tenant.as_deref().ok_or_else(|| {
+                    anyhow::anyhow!("--tenant is required for service principal login")
+                })?;
+                let cid = client_id.as_deref().ok_or_else(|| {
+                    anyhow::anyhow!("--client-id is required for service principal login")
+                })?;
+                let secret = client_secret.as_deref().ok_or_else(|| {
+                    anyhow::anyhow!("--client-secret is required for service principal login")
+                })?;
+                provider
+                    .login_service_principal(tenant, cid, secret)
+                    .await?;
+            } else if use_device_code {
+                provider.login_device_code(tenant.as_deref()).await?;
+            } else {
+                provider.login_interactive(tenant.as_deref()).await?;
+            }
+
+            Ok(())
+        }
+
+        CliCommand::Logout => {
+            let mut provider = auth::TokenProvider::load(subscription)?;
+            provider.logout()
+        }
+
+        CliCommand::Account { command } => match command {
+            AccountCommand::Show => {
+                let provider = auth::TokenProvider::load(subscription)?;
+                provider.show_account()
+            }
+        },
+
         CliCommand::Network { command } => match command {
-            NetworkCommand::Bastion { command } => handle_bastion(command, output_format).await?,
+            NetworkCommand::Bastion { command } => {
+                handle_bastion(command, output_format, subscription).await?;
+                Ok(())
+            }
         },
     }
-
-    Ok(())
 }
 
-async fn handle_bastion(cmd: BastionCommand, output_format: OutputFormat) -> anyhow::Result<()> {
+async fn handle_bastion(
+    cmd: BastionCommand,
+    output_format: OutputFormat,
+    subscription: Option<String>,
+) -> anyhow::Result<()> {
+    let mut provider = auth::TokenProvider::load(subscription)?;
+    let access_token = provider.get_access_token().await?;
+    let subscription_id = provider.get_subscription_id_or_fallback().await?;
+
+    let client = api_client::BastionClient::with_token(access_token, subscription_id);
+
     match cmd {
         BastionCommand::Create {
             name,
@@ -267,7 +363,8 @@ async fn handle_bastion(cmd: BastionCommand, output_format: OutputFormat) -> any
             tags,
         } => {
             let tags_map = tags.map(|v| v.into_iter().collect());
-            let value = commands::create::execute(
+            let value = commands::create::execute_with_client(
+                &client,
                 &resource_group,
                 &name,
                 &location,
@@ -291,16 +388,16 @@ async fn handle_bastion(cmd: BastionCommand, output_format: OutputFormat) -> any
         BastionCommand::Delete {
             name,
             resource_group,
-        } => commands::delete::execute(&resource_group, &name).await,
+        } => client.delete(&resource_group, &name).await,
         BastionCommand::List { resource_group } => {
-            let value = commands::list::execute(resource_group.as_deref()).await?;
+            let value = commands::list::execute_with_client(&client, resource_group.as_deref()).await?;
             output::print_output(&value, output_format)
         }
         BastionCommand::Show {
             name,
             resource_group,
         } => {
-            let value = commands::show::execute(&resource_group, &name).await?;
+            let value = commands::show::execute_with_client(&client, &resource_group, &name).await?;
             output::print_output(&value, output_format)
         }
         BastionCommand::Update {
@@ -318,7 +415,8 @@ async fn handle_bastion(cmd: BastionCommand, output_format: OutputFormat) -> any
             tags,
         } => {
             let tags_map = tags.map(|v| v.into_iter().collect());
-            let value = commands::update::execute(
+            let value = commands::update::execute_with_client(
+                &client,
                 &resource_group,
                 &name,
                 sku,
@@ -346,7 +444,8 @@ async fn handle_bastion(cmd: BastionCommand, output_format: OutputFormat) -> any
             ssh_key,
             ssh_args,
         } => {
-            commands::ssh::execute(
+            commands::ssh::execute_with_client(
+                &client,
                 &resource_group,
                 &name,
                 auth_type,
@@ -370,7 +469,8 @@ async fn handle_bastion(cmd: BastionCommand, output_format: OutputFormat) -> any
             configure,
             enable_mfa,
         } => {
-            commands::rdp::execute(
+            commands::rdp::execute_with_client(
+                &client,
                 &resource_group,
                 &name,
                 target_resource_id.as_deref(),
@@ -392,7 +492,8 @@ async fn handle_bastion(cmd: BastionCommand, output_format: OutputFormat) -> any
             port,
             timeout,
         } => {
-            commands::tunnel::execute(
+            commands::tunnel::execute_with_client(
+                &client,
                 &resource_group,
                 &name,
                 target_resource_id.as_deref(),
@@ -413,7 +514,8 @@ async fn handle_bastion(cmd: BastionCommand, output_format: OutputFormat) -> any
             interval,
             timeout,
         } => {
-            commands::wait::execute(
+            commands::wait::execute_with_client(
+                &client,
                 &resource_group,
                 &name,
                 created,
