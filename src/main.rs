@@ -71,6 +71,11 @@ enum CliCommand {
         command: VmssCommand,
     },
 
+    Deployment {
+        #[command(subcommand)]
+        command: DeploymentCommand,
+    },
+
     Network {
         #[command(subcommand)]
         command: NetworkCommand,
@@ -240,6 +245,118 @@ enum VmssCommand {
         interval: u64,
         #[arg(long, default_value_t = 3600)]
         timeout: u64,
+    },
+}
+
+#[derive(Subcommand)]
+enum DeploymentCommand {
+    Group {
+        #[command(subcommand)]
+        command: DeploymentGroupCommand,
+    },
+    Operation {
+        #[command(subcommand)]
+        command: DeploymentOperationCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum DeploymentGroupCommand {
+    List {
+        #[arg(short, long)]
+        resource_group: String,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+    },
+    Export {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+    },
+    Validate {
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(short, long)]
+        name: Option<String>,
+        #[arg(short = 'f', long)]
+        template_file: Option<String>,
+        #[arg(short = 'u', long)]
+        template_uri: Option<String>,
+        #[arg(short, long)]
+        parameters: Option<String>,
+        #[arg(long, default_value = "Incremental")]
+        mode: String,
+    },
+    WhatIf {
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(short, long)]
+        name: Option<String>,
+        #[arg(short = 'f', long)]
+        template_file: Option<String>,
+        #[arg(short = 'u', long)]
+        template_uri: Option<String>,
+        #[arg(short, long)]
+        parameters: Option<String>,
+        #[arg(long, default_value = "Incremental")]
+        mode: String,
+        #[arg(long, default_value = "FullResourcePayloads")]
+        result_format: String,
+    },
+    Cancel {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+    },
+    Wait {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long)]
+        created: bool,
+        #[arg(long)]
+        updated: bool,
+        #[arg(long)]
+        deleted: bool,
+        #[arg(long)]
+        exists: bool,
+        #[arg(long, default_value_t = 30)]
+        interval: u64,
+        #[arg(long, default_value_t = 3600)]
+        timeout: u64,
+    },
+}
+
+#[derive(Subcommand)]
+enum DeploymentOperationCommand {
+    Group {
+        #[command(subcommand)]
+        command: DeploymentOperationGroupCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum DeploymentOperationGroupCommand {
+    List {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long)]
+        operation_id: String,
     },
 }
 
@@ -512,6 +629,10 @@ async fn main() -> anyhow::Result<()> {
             handle_vmss(command, output_format, subscription).await
         }
 
+        CliCommand::Deployment { command } => {
+            handle_deployment(command, output_format, subscription).await
+        }
+
         CliCommand::Network { command } => match command {
             NetworkCommand::Bastion { command } => {
                 handle_bastion(command, output_format, subscription).await?;
@@ -670,6 +791,71 @@ async fn handle_vmss(
         VmssCommand::Wait { name, resource_group, created, updated, deleted, exists, interval, timeout } => {
             commands::vmss::wait::execute(&client, &resource_group, &name, created, updated, deleted, exists, interval, timeout).await
         }
+    }
+}
+
+async fn handle_deployment(
+    cmd: DeploymentCommand,
+    output_format: OutputFormat,
+    subscription: Option<String>,
+) -> anyhow::Result<()> {
+    let mut provider = auth::TokenProvider::load(subscription)?;
+    let access_token = provider.get_access_token().await?;
+    let subscription_id = provider.get_subscription_id_or_fallback().await?;
+
+    let client = arm_client::ArmClient::new(access_token, subscription_id);
+
+    match cmd {
+        DeploymentCommand::Group { command } => match command {
+            DeploymentGroupCommand::List { resource_group } => {
+                let value = commands::deployment::group::list::execute(&client, &resource_group).await?;
+                output::print_output(&value, output_format)
+            }
+            DeploymentGroupCommand::Show { name, resource_group } => {
+                let value = commands::deployment::group::show::execute(&client, &resource_group, &name).await?;
+                output::print_output(&value, output_format)
+            }
+            DeploymentGroupCommand::Export { name, resource_group } => {
+                let value = commands::deployment::group::export::execute(&client, &resource_group, &name).await?;
+                output::print_output(&value, output_format)
+            }
+            DeploymentGroupCommand::Validate { resource_group, name, template_file, template_uri, parameters, mode } => {
+                let deploy_name = name.unwrap_or_else(|| "validation".to_string());
+                let value = commands::deployment::group::validate::execute(
+                    &client, &resource_group, &deploy_name,
+                    template_file.as_deref(), template_uri.as_deref(),
+                    parameters.as_deref(), &mode,
+                ).await?;
+                output::print_output(&value, output_format)
+            }
+            DeploymentGroupCommand::WhatIf { resource_group, name, template_file, template_uri, parameters, mode, result_format } => {
+                let deploy_name = name.unwrap_or_else(|| "what-if".to_string());
+                let value = commands::deployment::group::what_if::execute(
+                    &client, &resource_group, &deploy_name,
+                    template_file.as_deref(), template_uri.as_deref(),
+                    parameters.as_deref(), &mode, Some(&result_format),
+                ).await?;
+                output::print_output(&value, output_format)
+            }
+            DeploymentGroupCommand::Cancel { name, resource_group } => {
+                commands::deployment::group::cancel::execute(&client, &resource_group, &name).await
+            }
+            DeploymentGroupCommand::Wait { name, resource_group, created, updated, deleted, exists, interval, timeout } => {
+                commands::deployment::group::wait::execute(&client, &resource_group, &name, created, updated, deleted, exists, interval, timeout).await
+            }
+        },
+        DeploymentCommand::Operation { command } => match command {
+            DeploymentOperationCommand::Group { command } => match command {
+                DeploymentOperationGroupCommand::List { name, resource_group } => {
+                    let value = commands::deployment::operation::group::list::execute(&client, &resource_group, &name).await?;
+                    output::print_output(&value, output_format)
+                }
+                DeploymentOperationGroupCommand::Show { name, resource_group, operation_id } => {
+                    let value = commands::deployment::operation::group::show::execute(&client, &resource_group, &name, &operation_id).await?;
+                    output::print_output(&value, output_format)
+                }
+            },
+        },
     }
 }
 

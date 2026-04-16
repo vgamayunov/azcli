@@ -104,6 +104,22 @@ Tokens are cached at `~/.azure/azcli_tokens.json` with automatic refresh.
 | `vmss update-instances --name NAME --resource-group RG --instance-ids ...` | Manually upgrade instances |
 | `vmss wait --name NAME --resource-group RG --created/--updated/--deleted/--exists` | Poll VMSS provisioning state |
 
+### Deployments
+
+All commands under `azcli deployment group <command>` or `azcli deployment operation group <command>`.
+
+| Command | Description |
+|---------|-------------|
+| `deployment group list --resource-group RG` | List deployments in a resource group |
+| `deployment group show --name NAME --resource-group RG` | Show deployment details |
+| `deployment group export --name NAME --resource-group RG` | Export the template used for a deployment |
+| `deployment group validate --resource-group RG -f FILE` | Validate a template without deploying |
+| `deployment group what-if --resource-group RG -f FILE` | Preview changes a deployment would make |
+| `deployment group cancel --name NAME --resource-group RG` | Cancel a running deployment |
+| `deployment group wait --name NAME --resource-group RG --created/--updated/--deleted/--exists` | Poll deployment state |
+| `deployment operation group list --name NAME --resource-group RG` | List operations for a deployment |
+| `deployment operation group show --name NAME --resource-group RG --operation-id ID` | Show a specific deployment operation |
+
 ### Azure Bastion
 
 All commands under `azcli network bastion <command>`.

@@ -6,6 +6,7 @@ use crate::models::*;
 
 const RESOURCE_GROUP_API_VERSION: &str = "2024-03-01";
 const COMPUTE_API_VERSION: &str = "2024-07-01";
+const DEPLOYMENT_API_VERSION: &str = "2024-03-01";
 
 #[derive(Clone)]
 pub struct ArmClient {
@@ -364,5 +365,156 @@ impl ArmClient {
                 anyhow::bail!("{action} VMSS failed ({status}): {body}");
             }
         }
+    }
+
+    pub async fn list_deployments(&self, resource_group: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourcegroups/{}/providers/Microsoft.Resources/deployments?api-version={}",
+            self.subscription_id, resource_group, DEPLOYMENT_API_VERSION
+        );
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to list deployments")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("List deployments failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse deployments list")
+    }
+
+    pub async fn show_deployment(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourcegroups/{}/providers/Microsoft.Resources/deployments/{}?api-version={}",
+            self.subscription_id, resource_group, name, DEPLOYMENT_API_VERSION
+        );
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to get deployment")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Get deployment failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse deployment response")
+    }
+
+    pub async fn export_deployment(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourcegroups/{}/providers/Microsoft.Resources/deployments/{}/exportTemplate?api-version={}",
+            self.subscription_id, resource_group, name, DEPLOYMENT_API_VERSION
+        );
+        debug!("POST {url}");
+        let resp = self.client.post(&url).bearer_auth(&self.access_token)
+            .header("Content-Length", "0").send().await
+            .context("Failed to export deployment template")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Export deployment template failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse exported template")
+    }
+
+    pub async fn validate_deployment(&self, resource_group: &str, name: &str, body: serde_json::Value) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourcegroups/{}/providers/Microsoft.Resources/deployments/{}/validate?api-version={}",
+            self.subscription_id, resource_group, name, DEPLOYMENT_API_VERSION
+        );
+        debug!("POST {url}");
+        let resp = self.client.post(&url).bearer_auth(&self.access_token).json(&body).send().await
+            .context("Failed to validate deployment")?;
+        // ARM returns 200 on valid, 400 on invalid — both are useful JSON
+        resp.json().await.context("Failed to parse validation response")
+    }
+
+    pub async fn what_if_deployment(&self, resource_group: &str, name: &str, body: serde_json::Value) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourcegroups/{}/providers/Microsoft.Resources/deployments/{}/whatIf?api-version={}",
+            self.subscription_id, resource_group, name, DEPLOYMENT_API_VERSION
+        );
+        debug!("POST {url}");
+        let resp = self.client.post(&url).bearer_auth(&self.access_token).json(&body).send().await
+            .context("Failed to execute what-if")?;
+
+        let status_code = resp.status().as_u16();
+        if status_code == 202 {
+            let location = resp.headers().get("Location")
+                .and_then(|v| v.to_str().ok())
+                .map(|s| s.to_string());
+            if let Some(poll_url) = location {
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                    debug!("GET {poll_url} (polling what-if)");
+                    let poll_resp = self.client.get(&poll_url).bearer_auth(&self.access_token).send().await
+                        .context("Failed to poll what-if result")?;
+                    let poll_status = poll_resp.status().as_u16();
+                    if poll_status == 200 {
+                        return poll_resp.json().await.context("Failed to parse what-if result");
+                    } else if poll_status == 202 {
+                        continue;
+                    } else {
+                        let body = poll_resp.text().await.unwrap_or_default();
+                        anyhow::bail!("What-if polling failed ({poll_status}): {body}");
+                    }
+                }
+            }
+            resp.json().await.context("Failed to parse what-if response")
+        } else if resp.status().is_success() {
+            resp.json().await.context("Failed to parse what-if response")
+        } else {
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("What-if failed ({status_code}): {body}");
+        }
+    }
+
+    pub async fn cancel_deployment(&self, resource_group: &str, name: &str) -> Result<()> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourcegroups/{}/providers/Microsoft.Resources/deployments/{}/cancel?api-version={}",
+            self.subscription_id, resource_group, name, DEPLOYMENT_API_VERSION
+        );
+        debug!("POST {url}");
+        let resp = self.client.post(&url).bearer_auth(&self.access_token)
+            .header("Content-Length", "0").send().await
+            .context("Failed to cancel deployment")?;
+        match resp.status().as_u16() {
+            200 | 204 => Ok(()),
+            status => {
+                let body = resp.text().await.unwrap_or_default();
+                anyhow::bail!("Cancel deployment failed ({status}): {body}");
+            }
+        }
+    }
+
+    pub async fn list_deployment_operations(&self, resource_group: &str, deployment_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourcegroups/{}/providers/Microsoft.Resources/deployments/{}/operations?api-version={}",
+            self.subscription_id, resource_group, deployment_name, DEPLOYMENT_API_VERSION
+        );
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to list deployment operations")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("List deployment operations failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse deployment operations")
+    }
+
+    pub async fn show_deployment_operation(&self, resource_group: &str, deployment_name: &str, operation_id: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourcegroups/{}/providers/Microsoft.Resources/deployments/{}/operations/{}?api-version={}",
+            self.subscription_id, resource_group, deployment_name, operation_id, DEPLOYMENT_API_VERSION
+        );
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to get deployment operation")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Get deployment operation failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse deployment operation")
     }
 }
