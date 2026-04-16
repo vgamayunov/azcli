@@ -7,7 +7,7 @@ Build a Rust equivalent of the Azure CLI, starting with the bastion extension an
 ## Current Status: WORKING
 
 - **Build**: `cargo build` — 0 errors (14 dead-code warnings from legacy bastion `execute()` fns)
-- **Last commit**: `67e0029` — `feat: add resource group and VM commands (list, show, start, stop)`
+- **Last commit**: `ae1dbc3` — `feat: add vm deallocate command, fix vm stop to use powerOff (match az cli semantics)`
 - **All commands tested end-to-end against live Azure subscription**
 
 ## Implemented Commands
@@ -21,7 +21,8 @@ azcli group show --name NAME [-o ...]
 azcli vm list [--resource-group RG] [-o ...]
 azcli vm show --name NAME --resource-group RG [-o ...]
 azcli vm start --name NAME --resource-group RG
-azcli vm stop --name NAME --resource-group RG [--no-wait] [--skip-shutdown]
+azcli vm stop --name NAME --resource-group RG [--no-wait]
+azcli vm deallocate --name NAME --resource-group RG [--no-wait]
 azcli network bastion {create|delete|list|show|update|ssh|rdp|tunnel|wait}
 ```
 
@@ -53,6 +54,7 @@ src/
     │   └── show.rs
     ├── vm/              # Virtual machine commands
     │   ├── mod.rs
+    │   ├── deallocate.rs
     │   ├── list.rs
     │   ├── show.rs
     │   ├── start.rs
@@ -82,6 +84,11 @@ The ARM API nests VM fields under `properties` (hardwareProfile, provisioningSta
 `VirtualMachine` model deserializes the raw structure, then `to_flattened_value()` produces
 az-cli-compatible flattened JSON (properties promoted to top level, resourceGroup extracted from id).
 
+### VM stop vs deallocate semantics (matches az cli)
+- `azcli vm stop` → POST `.../powerOff` (keeps allocation, still billed for compute)
+- `azcli vm deallocate` → POST `.../deallocate` (releases compute, stops billing)
+- Both support `--no-wait`
+
 ### Critical bug fix: subscription ID prefix stripping
 ARM `/subscriptions` API returns IDs as `/subscriptions/{guid}`. We stored verbatim, causing
 double-prefixed URLs (`/subscriptions//subscriptions/{guid}/...`) → 400 errors.
@@ -106,10 +113,10 @@ Falls back to first 6 keys if none match.
 - `97d6de8` — feat: Rust Azure CLI with bastion extension and -o output format support
 - `a0a0b47` — feat: add native OAuth2 login and fix subscription ID prefix from ARM API
 - `67e0029` — feat: add resource group and VM commands (list, show, start, stop)
+- `ae1dbc3` — feat: add vm deallocate command, fix vm stop to use powerOff (match az cli semantics)
 
 ## Known Issues
 - 14 dead-code warnings from old bastion `execute()` functions (cosmetic, can clean up)
-- `vm stop` defaults to `deallocate` (releases compute billing); `az vm stop` defaults to `powerOff`. Exposed via `--skip-shutdown` flag but semantics differ from az cli where `az vm stop` = powerOff and `az vm deallocate` = deallocate. May want a separate `vm deallocate` command.
 - Azure Bastion server intermittently returns proxy-101-then-400 (not a client bug, Python az CLI has same issue)
 - No retry logic for WebSocket connection failures
 
@@ -127,7 +134,6 @@ sha2/dirs/open/chrono       # Auth module deps
 ```
 
 ## What's Left (Future Work)
-- `vm deallocate` as separate command (match az cli semantics)
 - Pagination support for list APIs (currently returns first page only)
 - Retry logic for WebSocket connection failures
 - Tests (unit + integration)
