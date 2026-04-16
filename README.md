@@ -88,6 +88,22 @@ Tokens are cached at `~/.azure/azcli_tokens.json` with automatic refresh.
 | `vm stop --name NAME --resource-group RG [--no-wait]` | Power off a VM (keeps allocation) |
 | `vm deallocate --name NAME --resource-group RG [--no-wait]` | Deallocate a VM (stops billing) |
 
+### Virtual Machine Scale Sets
+
+| Command | Description |
+|---------|-------------|
+| `vmss list [--resource-group RG]` | List VMSS (all or by resource group) |
+| `vmss show --name NAME --resource-group RG` | Show VMSS details |
+| `vmss list-instances --name NAME --resource-group RG [--expand]` | List instances in a VMSS |
+| `vmss list-skus --name NAME --resource-group RG` | List available SKUs for a VMSS |
+| `vmss list-instance-public-ips --name NAME --resource-group RG` | List public IPs of VMSS instances |
+| `vmss list-instance-connection-info --name NAME --resource-group RG` | List NIC info for VMSS instances |
+| `vmss scale --name NAME --resource-group RG --new-capacity N` | Scale VMSS to N instances |
+| `vmss start --name NAME --resource-group RG [--instance-ids ...]` | Start VMSS instances |
+| `vmss stop --name NAME --resource-group RG [--instance-ids ...]` | Stop VMSS instances |
+| `vmss update-instances --name NAME --resource-group RG --instance-ids ...` | Manually upgrade instances |
+| `vmss wait --name NAME --resource-group RG --created/--updated/--deleted/--exists` | Poll VMSS provisioning state |
+
 ### Azure Bastion
 
 All commands under `azcli network bastion <command>`.
