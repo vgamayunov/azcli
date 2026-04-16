@@ -7,6 +7,9 @@ use crate::models::*;
 const RESOURCE_GROUP_API_VERSION: &str = "2024-03-01";
 const COMPUTE_API_VERSION: &str = "2024-07-01";
 const DEPLOYMENT_API_VERSION: &str = "2024-03-01";
+const NETWORK_API_VERSION: &str = "2023-11-01";
+const SKU_API_VERSION: &str = "2021-07-01";
+const DEVTESTLAB_API_VERSION: &str = "2018-09-15";
 
 #[derive(Clone)]
 pub struct ArmClient {
@@ -181,6 +184,352 @@ impl ArmClient {
             status => {
                 let body = resp.text().await.unwrap_or_default();
                 anyhow::bail!("{action} VM failed ({status}): {body}");
+            }
+        }
+    }
+
+    pub async fn vm_post_action(&self, resource_group: &str, name: &str, action: &str) -> Result<()> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/virtualMachines/{}/{}?api-version={}",
+            self.subscription_id, resource_group, name, action, COMPUTE_API_VERSION
+        );
+        debug!("POST {url}");
+
+        let resp = self.client.post(&url).bearer_auth(&self.access_token)
+            .header("Content-Length", "0").send().await
+            .with_context(|| format!("Failed to {action} VM"))?;
+
+        match resp.status().as_u16() {
+            200 | 202 => Ok(()),
+            status => {
+                let body = resp.text().await.unwrap_or_default();
+                anyhow::bail!("{action} VM failed ({status}): {body}");
+            }
+        }
+    }
+
+    pub async fn vm_post_action_with_body(&self, resource_group: &str, name: &str, action: &str, body: serde_json::Value) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/virtualMachines/{}/{}?api-version={}",
+            self.subscription_id, resource_group, name, action, COMPUTE_API_VERSION
+        );
+        debug!("POST {url}");
+
+        let resp = self.client.post(&url).bearer_auth(&self.access_token)
+            .json(&body).send().await
+            .with_context(|| format!("Failed to {action} VM"))?;
+
+        match resp.status().as_u16() {
+            200 | 202 => resp.json().await.context("Failed to parse response"),
+            status => {
+                let body = resp.text().await.unwrap_or_default();
+                anyhow::bail!("{action} VM failed ({status}): {body}");
+            }
+        }
+    }
+
+    pub async fn vm_get_instance_view(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/virtualMachines/{}/instanceView?api-version={}",
+            self.subscription_id, resource_group, name, COMPUTE_API_VERSION
+        );
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to get VM instance view")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Get VM instance view failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse instance view")
+    }
+
+    pub async fn get_network_interface(&self, nic_id: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com{nic_id}?api-version={NETWORK_API_VERSION}"
+        );
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to get network interface")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Get NIC failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse NIC response")
+    }
+
+    pub async fn get_public_ip(&self, pip_id: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com{pip_id}?api-version={NETWORK_API_VERSION}"
+        );
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to get public IP")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Get public IP failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse public IP response")
+    }
+
+    pub async fn vm_list_sizes(&self, location: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/locations/{}/vmSizes?api-version={}",
+            self.subscription_id, location, COMPUTE_API_VERSION
+        );
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to list VM sizes")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("List VM sizes failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse VM sizes")
+    }
+
+    pub async fn vm_list_skus(&self) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/skus?api-version={}",
+            self.subscription_id, SKU_API_VERSION
+        );
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to list compute SKUs")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("List compute SKUs failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse compute SKUs")
+    }
+
+    pub async fn vm_list_usage(&self, location: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/locations/{}/usages?api-version={}",
+            self.subscription_id, location, COMPUTE_API_VERSION
+        );
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to list VM usage")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("List VM usage failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse VM usage")
+    }
+
+    pub async fn vm_list_resize_options(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/virtualMachines/{}/vmSizes?api-version={}",
+            self.subscription_id, resource_group, name, COMPUTE_API_VERSION
+        );
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to list VM resize options")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("List VM resize options failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse VM resize options")
+    }
+
+    pub async fn vm_create(&self, resource_group: &str, name: &str, body: serde_json::Value) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/virtualMachines/{}?api-version={}",
+            self.subscription_id, resource_group, name, COMPUTE_API_VERSION
+        );
+        debug!("PUT {url}");
+        let resp = self.client.put(&url).bearer_auth(&self.access_token).json(&body).send().await
+            .context("Failed to create VM")?;
+        match resp.status().as_u16() {
+            200 | 201 => resp.json().await.context("Failed to parse VM create response"),
+            status => {
+                let body = resp.text().await.unwrap_or_default();
+                anyhow::bail!("Create VM failed ({status}): {body}");
+            }
+        }
+    }
+
+    pub async fn vm_delete(&self, resource_group: &str, name: &str, force: bool) -> Result<()> {
+        let mut url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/virtualMachines/{}?api-version={}",
+            self.subscription_id, resource_group, name, COMPUTE_API_VERSION
+        );
+        if force {
+            url.push_str("&forceDeletion=true");
+        }
+        debug!("DELETE {url}");
+        let resp = self.client.delete(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to delete VM")?;
+        match resp.status().as_u16() {
+            200 | 202 | 204 => Ok(()),
+            status => {
+                let body = resp.text().await.unwrap_or_default();
+                anyhow::bail!("Delete VM failed ({status}): {body}");
+            }
+        }
+    }
+
+    pub async fn vm_update(&self, resource_group: &str, name: &str, body: serde_json::Value) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/virtualMachines/{}?api-version={}",
+            self.subscription_id, resource_group, name, COMPUTE_API_VERSION
+        );
+        debug!("PATCH {url}");
+        let resp = self.client.patch(&url).bearer_auth(&self.access_token).json(&body).send().await
+            .context("Failed to update VM")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Update VM failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse VM update response")
+    }
+
+    pub async fn vm_assess_patches(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/virtualMachines/{}/assessPatches?api-version={}",
+            self.subscription_id, resource_group, name, COMPUTE_API_VERSION
+        );
+        debug!("POST {url}");
+        let resp = self.client.post(&url).bearer_auth(&self.access_token)
+            .header("Content-Length", "0").send().await
+            .context("Failed to assess patches")?;
+        match resp.status().as_u16() {
+            200 | 202 => {
+                if resp.status().as_u16() == 202 {
+                    let location = resp.headers().get("Location")
+                        .and_then(|v| v.to_str().ok()).map(|s| s.to_string());
+                    if let Some(poll_url) = location {
+                        loop {
+                            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                            let poll_resp = self.client.get(&poll_url).bearer_auth(&self.access_token).send().await
+                                .context("Failed to poll assess patches")?;
+                            match poll_resp.status().as_u16() {
+                                200 => return poll_resp.json().await.context("Failed to parse assess patches result"),
+                                202 => continue,
+                                s => {
+                                    let body = poll_resp.text().await.unwrap_or_default();
+                                    anyhow::bail!("Assess patches poll failed ({s}): {body}");
+                                }
+                            }
+                        }
+                    }
+                }
+                resp.json().await.context("Failed to parse assess patches response")
+            }
+            status => {
+                let body = resp.text().await.unwrap_or_default();
+                anyhow::bail!("Assess patches failed ({status}): {body}");
+            }
+        }
+    }
+
+    pub async fn vm_install_patches(&self, resource_group: &str, name: &str, body: serde_json::Value) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/virtualMachines/{}/installPatches?api-version={}",
+            self.subscription_id, resource_group, name, COMPUTE_API_VERSION
+        );
+        debug!("POST {url}");
+        let resp = self.client.post(&url).bearer_auth(&self.access_token)
+            .json(&body).send().await
+            .context("Failed to install patches")?;
+        match resp.status().as_u16() {
+            200 | 202 => {
+                if resp.status().as_u16() == 202 {
+                    let location = resp.headers().get("Location")
+                        .and_then(|v| v.to_str().ok()).map(|s| s.to_string());
+                    if let Some(poll_url) = location {
+                        loop {
+                            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                            let poll_resp = self.client.get(&poll_url).bearer_auth(&self.access_token).send().await
+                                .context("Failed to poll install patches")?;
+                            match poll_resp.status().as_u16() {
+                                200 => return poll_resp.json().await.context("Failed to parse install patches result"),
+                                202 => continue,
+                                s => {
+                                    let body = poll_resp.text().await.unwrap_or_default();
+                                    anyhow::bail!("Install patches poll failed ({s}): {body}");
+                                }
+                            }
+                        }
+                    }
+                }
+                resp.json().await.context("Failed to parse install patches response")
+            }
+            status => {
+                let body = resp.text().await.unwrap_or_default();
+                anyhow::bail!("Install patches failed ({status}): {body}");
+            }
+        }
+    }
+
+    pub async fn vm_auto_shutdown(&self, resource_group: &str, name: &str, body: serde_json::Value) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.DevTestLab/schedules/shutdown-computevm-{}?api-version={}",
+            self.subscription_id, resource_group, name, DEVTESTLAB_API_VERSION
+        );
+        debug!("PUT {url}");
+        let resp = self.client.put(&url).bearer_auth(&self.access_token).json(&body).send().await
+            .context("Failed to set auto-shutdown")?;
+        match resp.status().as_u16() {
+            200 | 201 => resp.json().await.context("Failed to parse auto-shutdown response"),
+            status => {
+                let body = resp.text().await.unwrap_or_default();
+                anyhow::bail!("Set auto-shutdown failed ({status}): {body}");
+            }
+        }
+    }
+
+    pub async fn vm_auto_shutdown_delete(&self, resource_group: &str, name: &str) -> Result<()> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.DevTestLab/schedules/shutdown-computevm-{}?api-version={}",
+            self.subscription_id, resource_group, name, DEVTESTLAB_API_VERSION
+        );
+        debug!("DELETE {url}");
+        let resp = self.client.delete(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to delete auto-shutdown")?;
+        match resp.status().as_u16() {
+            200 | 204 => Ok(()),
+            status => {
+                let body = resp.text().await.unwrap_or_default();
+                anyhow::bail!("Delete auto-shutdown failed ({status}): {body}");
+            }
+        }
+    }
+
+    pub async fn get_resource_by_id(&self, resource_id: &str, api_version: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com{resource_id}?api-version={api_version}"
+        );
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to get resource")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Get resource failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse resource response")
+    }
+
+    pub async fn put_resource_by_id(&self, resource_id: &str, api_version: &str, body: serde_json::Value) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com{resource_id}?api-version={api_version}"
+        );
+        debug!("PUT {url}");
+        let resp = self.client.put(&url).bearer_auth(&self.access_token).json(&body).send().await
+            .context("Failed to put resource")?;
+        match resp.status().as_u16() {
+            200 | 201 => resp.json().await.context("Failed to parse resource response"),
+            status => {
+                let body = resp.text().await.unwrap_or_default();
+                anyhow::bail!("Put resource failed ({status}): {body}");
             }
         }
     }

@@ -156,6 +156,250 @@ enum VmCommand {
         #[arg(long)]
         no_wait: bool,
     },
+    #[command(name = "get-instance-view")]
+    GetInstanceView {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+    },
+    #[command(name = "list-ip-addresses")]
+    ListIpAddresses {
+        #[arg(short, long)]
+        name: Option<String>,
+        #[arg(short, long)]
+        resource_group: Option<String>,
+    },
+    #[command(name = "list-sizes")]
+    ListSizes {
+        #[arg(short, long)]
+        location: String,
+    },
+    #[command(name = "list-skus")]
+    ListSkus {
+        #[arg(short, long)]
+        location: Option<String>,
+        #[arg(short = 't', long)]
+        resource_type: Option<String>,
+        #[arg(short, long)]
+        size: Option<String>,
+        #[arg(short, long)]
+        zone: bool,
+    },
+    #[command(name = "list-usage")]
+    ListUsage {
+        #[arg(short, long)]
+        location: String,
+    },
+    #[command(name = "list-vm-resize-options")]
+    ListVmResizeOptions {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+    },
+    Restart {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long)]
+        no_wait: bool,
+    },
+    Create {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long)]
+        image: String,
+        #[arg(long, default_value = "Standard_DS1_v2")]
+        size: String,
+        #[arg(short, long)]
+        location: Option<String>,
+        #[arg(long)]
+        admin_username: Option<String>,
+        #[arg(long)]
+        admin_password: Option<String>,
+        #[arg(long)]
+        ssh_key_value: Option<String>,
+        #[arg(long)]
+        authentication_type: Option<String>,
+        #[arg(long)]
+        subnet: Option<String>,
+        #[arg(long)]
+        os_disk_size_gb: Option<i64>,
+        #[arg(long, num_args = 1..)]
+        data_disk_sizes_gb: Vec<i64>,
+        #[arg(long, num_args = 1..)]
+        tags: Vec<String>,
+        #[arg(long)]
+        no_wait: bool,
+    },
+    Delete {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long)]
+        force_deletion: bool,
+        #[arg(long)]
+        no_wait: bool,
+    },
+    Update {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long, num_args = 1..)]
+        set: Vec<String>,
+        #[arg(long)]
+        no_wait: bool,
+    },
+    Resize {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long)]
+        size: String,
+        #[arg(long)]
+        no_wait: bool,
+    },
+    Redeploy {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long)]
+        no_wait: bool,
+    },
+    Reimage {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long)]
+        no_wait: bool,
+    },
+    Reapply {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long)]
+        no_wait: bool,
+    },
+    #[command(name = "perform-maintenance")]
+    PerformMaintenance {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+    },
+    #[command(name = "simulate-eviction")]
+    SimulateEviction {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+    },
+    Generalize {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+    },
+    Capture {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long)]
+        vhd_name_prefix: String,
+        #[arg(long, default_value = "vhds")]
+        storage_container: String,
+        #[arg(long)]
+        overwrite: bool,
+    },
+    Convert {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+    },
+    #[command(name = "assess-patches")]
+    AssessPatches {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+    },
+    #[command(name = "install-patches")]
+    InstallPatches {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long)]
+        maximum_duration: String,
+        #[arg(long)]
+        reboot_setting: String,
+        #[arg(long, num_args = 1..)]
+        classifications_to_include_linux: Vec<String>,
+        #[arg(long, num_args = 1..)]
+        classifications_to_include_win: Vec<String>,
+    },
+    #[command(name = "auto-shutdown")]
+    AutoShutdown {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long)]
+        time: Option<String>,
+        #[arg(long)]
+        off: bool,
+        #[arg(long)]
+        email: Option<String>,
+        #[arg(long)]
+        webhook: Option<String>,
+        #[arg(short, long)]
+        location: Option<String>,
+    },
+    #[command(name = "open-port")]
+    OpenPort {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long)]
+        port: String,
+        #[arg(long, default_value = "900")]
+        priority: i64,
+        #[arg(long)]
+        nsg_name: Option<String>,
+        #[arg(long)]
+        apply_to_subnet: bool,
+    },
+    Wait {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long)]
+        created: bool,
+        #[arg(long)]
+        updated: bool,
+        #[arg(long)]
+        deleted: bool,
+        #[arg(long)]
+        exists: bool,
+        #[arg(long, default_value = "30")]
+        interval: u64,
+        #[arg(long, default_value = "3600")]
+        timeout: u64,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1070,6 +1314,102 @@ async fn handle_vm(
         }
         VmCommand::Deallocate { name, resource_group, no_wait } => {
             commands::vm::deallocate::execute(&client, &resource_group, &name, no_wait).await
+        }
+        VmCommand::GetInstanceView { name, resource_group } => {
+            let value = commands::vm::get_instance_view::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format)
+        }
+        VmCommand::ListIpAddresses { name, resource_group } => {
+            let value = commands::vm::list_ip_addresses::execute(&client, resource_group.as_deref(), name.as_deref()).await?;
+            output::print_output(&value, output_format)
+        }
+        VmCommand::ListSizes { location } => {
+            let value = commands::vm::list_sizes::execute(&client, &location).await?;
+            output::print_output(&value, output_format)
+        }
+        VmCommand::ListSkus { location, resource_type, size, zone } => {
+            let value = commands::vm::list_skus::execute(&client, location.as_deref(), resource_type.as_deref(), size.as_deref(), zone).await?;
+            output::print_output(&value, output_format)
+        }
+        VmCommand::ListUsage { location } => {
+            let value = commands::vm::list_usage::execute(&client, &location).await?;
+            output::print_output(&value, output_format)
+        }
+        VmCommand::ListVmResizeOptions { name, resource_group } => {
+            let value = commands::vm::list_vm_resize_options::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format)
+        }
+        VmCommand::Restart { name, resource_group, no_wait } => {
+            commands::vm::restart::execute(&client, &resource_group, &name, no_wait).await
+        }
+        VmCommand::Create { name, resource_group, image, size, location, admin_username, admin_password, ssh_key_value, authentication_type, subnet, os_disk_size_gb, data_disk_sizes_gb, tags, no_wait: _ } => {
+            let loc = location.as_deref().unwrap_or("eastus");
+            let tags_ref = if tags.is_empty() { None } else { Some(tags.as_slice()) };
+            let value = commands::vm::create::execute(
+                &client, &resource_group, &name, &image, loc, &size,
+                admin_username.as_deref(), admin_password.as_deref(),
+                ssh_key_value.as_deref(), authentication_type.as_deref(),
+                subnet.as_deref(), os_disk_size_gb, &data_disk_sizes_gb, tags_ref,
+            ).await?;
+            output::print_output(&value, output_format)
+        }
+        VmCommand::Delete { name, resource_group, force_deletion, no_wait } => {
+            commands::vm::delete_vm::execute(&client, &resource_group, &name, force_deletion, no_wait).await
+        }
+        VmCommand::Update { name, resource_group, set, no_wait: _ } => {
+            let value = commands::vm::update_vm::execute(&client, &resource_group, &name, &set).await?;
+            output::print_output(&value, output_format)
+        }
+        VmCommand::Resize { name, resource_group, size, no_wait: _ } => {
+            let value = commands::vm::resize::execute(&client, &resource_group, &name, &size).await?;
+            output::print_output(&value, output_format)
+        }
+        VmCommand::Redeploy { name, resource_group, no_wait } => {
+            commands::vm::redeploy::execute(&client, &resource_group, &name, no_wait).await
+        }
+        VmCommand::Reimage { name, resource_group, no_wait } => {
+            commands::vm::reimage::execute(&client, &resource_group, &name, no_wait).await
+        }
+        VmCommand::Reapply { name, resource_group, no_wait } => {
+            commands::vm::reapply::execute(&client, &resource_group, &name, no_wait).await
+        }
+        VmCommand::PerformMaintenance { name, resource_group } => {
+            commands::vm::perform_maintenance::execute(&client, &resource_group, &name).await
+        }
+        VmCommand::SimulateEviction { name, resource_group } => {
+            commands::vm::simulate_eviction::execute(&client, &resource_group, &name).await
+        }
+        VmCommand::Generalize { name, resource_group } => {
+            commands::vm::generalize::execute(&client, &resource_group, &name).await
+        }
+        VmCommand::Capture { name, resource_group, vhd_name_prefix, storage_container, overwrite } => {
+            let value = commands::vm::capture::execute(&client, &resource_group, &name, &vhd_name_prefix, &storage_container, overwrite).await?;
+            output::print_output(&value, output_format)
+        }
+        VmCommand::Convert { name, resource_group } => {
+            commands::vm::convert::execute(&client, &resource_group, &name).await
+        }
+        VmCommand::AssessPatches { name, resource_group } => {
+            let value = commands::vm::assess_patches::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format)
+        }
+        VmCommand::InstallPatches { name, resource_group, maximum_duration, reboot_setting, classifications_to_include_linux, classifications_to_include_win } => {
+            let linux_cls = if classifications_to_include_linux.is_empty() { None } else { Some(classifications_to_include_linux.as_slice()) };
+            let win_cls = if classifications_to_include_win.is_empty() { None } else { Some(classifications_to_include_win.as_slice()) };
+            let value = commands::vm::install_patches::execute(&client, &resource_group, &name, &maximum_duration, &reboot_setting, linux_cls, win_cls).await?;
+            output::print_output(&value, output_format)
+        }
+        VmCommand::AutoShutdown { name, resource_group, time, off, email, webhook, location } => {
+            let loc = location.as_deref().unwrap_or("eastus");
+            let value = commands::vm::auto_shutdown::execute(&client, &resource_group, &name, time.as_deref(), off, email.as_deref(), webhook.as_deref(), loc).await?;
+            output::print_output(&value, output_format)
+        }
+        VmCommand::OpenPort { name, resource_group, port, priority, nsg_name, apply_to_subnet } => {
+            let value = commands::vm::open_port::execute(&client, &resource_group, &name, &port, priority, nsg_name.as_deref(), apply_to_subnet).await?;
+            output::print_output(&value, output_format)
+        }
+        VmCommand::Wait { name, resource_group, created, updated, deleted, exists, interval, timeout } => {
+            commands::vm::vm_wait::execute(&client, &resource_group, &name, created, updated, deleted, exists, interval, timeout).await
         }
     }
 }
