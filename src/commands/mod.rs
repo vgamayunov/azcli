@@ -9,4 +9,5 @@ pub mod ssh;
 pub mod tunnel;
 pub mod update;
 pub mod vm;
+pub mod vmss;
 pub mod wait;

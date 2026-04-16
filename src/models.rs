@@ -284,3 +284,166 @@ pub struct VmInstanceViewStatus {
     pub level: Option<String>,
     pub time: Option<String>,
 }
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Vmss {
+    pub id: Option<String>,
+    pub name: String,
+    pub location: Option<String>,
+    #[serde(rename = "type")]
+    pub resource_type: Option<String>,
+    pub zones: Option<Vec<String>>,
+    pub tags: Option<HashMap<String, String>>,
+    pub identity: Option<serde_json::Value>,
+    pub sku: Option<VmssSku>,
+    pub properties: Option<VmssProperties>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VmssSku {
+    pub name: Option<String>,
+    pub tier: Option<String>,
+    pub capacity: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VmssProperties {
+    pub provisioning_state: Option<String>,
+    pub unique_id: Option<String>,
+    pub orchestration_mode: Option<String>,
+    pub overprovision: Option<bool>,
+    pub single_placement_group: Option<bool>,
+    pub platform_fault_domain_count: Option<i64>,
+    pub time_created: Option<String>,
+    pub upgrade_policy: Option<serde_json::Value>,
+    pub virtual_machine_profile: Option<serde_json::Value>,
+    pub do_not_run_extensions_on_overprovisioned_v_ms: Option<bool>,
+}
+
+impl Vmss {
+    pub fn to_flattened_value(&self) -> serde_json::Value {
+        let mut map = serde_json::Map::new();
+
+        if let Some(id) = &self.id {
+            map.insert("id".into(), serde_json::Value::String(id.clone()));
+        }
+        map.insert("name".into(), serde_json::Value::String(self.name.clone()));
+        if let Some(loc) = &self.location {
+            map.insert("location".into(), serde_json::Value::String(loc.clone()));
+        }
+        if let Some(t) = &self.resource_type {
+            map.insert("type".into(), serde_json::Value::String(t.clone()));
+        }
+        if let Some(zones) = &self.zones {
+            map.insert(
+                "zones".into(),
+                serde_json::to_value(zones).unwrap_or_default(),
+            );
+        }
+        if let Some(tags) = &self.tags {
+            map.insert(
+                "tags".into(),
+                serde_json::to_value(tags).unwrap_or_default(),
+            );
+        }
+        if let Some(identity) = &self.identity {
+            map.insert("identity".into(), identity.clone());
+        }
+        if let Some(sku) = &self.sku {
+            map.insert("sku".into(), serde_json::to_value(sku).unwrap_or_default());
+        }
+
+        if let Some(props) = &self.properties {
+            if let Ok(serde_json::Value::Object(props_map)) = serde_json::to_value(props) {
+                for (k, v) in props_map {
+                    map.insert(k, v);
+                }
+            }
+        }
+
+        if let Some(id) = &self.id {
+            if let Some(rg) = extract_resource_group(id) {
+                map.insert("resourceGroup".into(), serde_json::Value::String(rg));
+            }
+        }
+
+        serde_json::Value::Object(map)
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VmssInstance {
+    pub id: Option<String>,
+    pub name: Option<String>,
+    pub instance_id: Option<String>,
+    pub location: Option<String>,
+    #[serde(rename = "type")]
+    pub resource_type: Option<String>,
+    pub tags: Option<HashMap<String, String>>,
+    pub sku: Option<VmssSku>,
+    pub properties: Option<VmssInstanceProperties>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VmssInstanceProperties {
+    pub provisioning_state: Option<String>,
+    pub latest_model_applied: Option<bool>,
+    pub vm_id: Option<String>,
+    pub instance_view: Option<VmInstanceView>,
+    pub hardware_profile: Option<VmHardwareProfile>,
+    pub storage_profile: Option<VmStorageProfile>,
+    pub os_profile: Option<VmOsProfile>,
+    pub network_profile: Option<VmNetworkProfile>,
+}
+
+impl VmssInstance {
+    pub fn to_flattened_value(&self) -> serde_json::Value {
+        let mut map = serde_json::Map::new();
+
+        if let Some(id) = &self.id {
+            map.insert("id".into(), serde_json::Value::String(id.clone()));
+        }
+        if let Some(name) = &self.name {
+            map.insert("name".into(), serde_json::Value::String(name.clone()));
+        }
+        if let Some(iid) = &self.instance_id {
+            map.insert("instanceId".into(), serde_json::Value::String(iid.clone()));
+        }
+        if let Some(loc) = &self.location {
+            map.insert("location".into(), serde_json::Value::String(loc.clone()));
+        }
+        if let Some(t) = &self.resource_type {
+            map.insert("type".into(), serde_json::Value::String(t.clone()));
+        }
+        if let Some(tags) = &self.tags {
+            map.insert(
+                "tags".into(),
+                serde_json::to_value(tags).unwrap_or_default(),
+            );
+        }
+        if let Some(sku) = &self.sku {
+            map.insert("sku".into(), serde_json::to_value(sku).unwrap_or_default());
+        }
+
+        if let Some(props) = &self.properties {
+            if let Ok(serde_json::Value::Object(props_map)) = serde_json::to_value(props) {
+                for (k, v) in props_map {
+                    map.insert(k, v);
+                }
+            }
+        }
+
+        if let Some(id) = &self.id {
+            if let Some(rg) = extract_resource_group(id) {
+                map.insert("resourceGroup".into(), serde_json::Value::String(rg));
+            }
+        }
+
+        serde_json::Value::Object(map)
+    }
+}

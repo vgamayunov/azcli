@@ -66,6 +66,11 @@ enum CliCommand {
         command: VmCommand,
     },
 
+    Vmss {
+        #[command(subcommand)]
+        command: VmssCommand,
+    },
+
     Network {
         #[command(subcommand)]
         command: NetworkCommand,
@@ -145,6 +150,96 @@ enum VmCommand {
         resource_group: String,
         #[arg(long)]
         no_wait: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum VmssCommand {
+    List {
+        #[arg(short, long)]
+        resource_group: Option<String>,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+    },
+    ListInstances {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long)]
+        expand: Option<String>,
+    },
+    ListSkus {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+    },
+    ListInstancePublicIps {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+    },
+    ListInstanceConnectionInfo {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+    },
+    Scale {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long)]
+        new_capacity: i64,
+    },
+    Start {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long, num_args = 1..)]
+        instance_ids: Option<Vec<String>>,
+    },
+    Stop {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long, num_args = 1..)]
+        instance_ids: Option<Vec<String>>,
+    },
+    UpdateInstances {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long, num_args = 1.., required = true)]
+        instance_ids: Vec<String>,
+    },
+    Wait {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long)]
+        created: bool,
+        #[arg(long)]
+        updated: bool,
+        #[arg(long)]
+        deleted: bool,
+        #[arg(long)]
+        exists: bool,
+        #[arg(long, default_value_t = 30)]
+        interval: u64,
+        #[arg(long, default_value_t = 3600)]
+        timeout: u64,
     },
 }
 
@@ -413,6 +508,10 @@ async fn main() -> anyhow::Result<()> {
             handle_vm(command, output_format, subscription).await
         }
 
+        CliCommand::Vmss { command } => {
+            handle_vmss(command, output_format, subscription).await
+        }
+
         CliCommand::Network { command } => match command {
             NetworkCommand::Bastion { command } => {
                 handle_bastion(command, output_format, subscription).await?;
@@ -516,6 +615,60 @@ async fn handle_vm(
         }
         VmCommand::Deallocate { name, resource_group, no_wait } => {
             commands::vm::deallocate::execute(&client, &resource_group, &name, no_wait).await
+        }
+    }
+}
+
+async fn handle_vmss(
+    cmd: VmssCommand,
+    output_format: OutputFormat,
+    subscription: Option<String>,
+) -> anyhow::Result<()> {
+    let mut provider = auth::TokenProvider::load(subscription)?;
+    let access_token = provider.get_access_token().await?;
+    let subscription_id = provider.get_subscription_id_or_fallback().await?;
+
+    let client = arm_client::ArmClient::new(access_token, subscription_id);
+
+    match cmd {
+        VmssCommand::List { resource_group } => {
+            let value = commands::vmss::list::execute(&client, resource_group.as_deref()).await?;
+            output::print_output(&value, output_format)
+        }
+        VmssCommand::Show { name, resource_group } => {
+            let value = commands::vmss::show::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format)
+        }
+        VmssCommand::ListInstances { name, resource_group, expand } => {
+            let value = commands::vmss::list_instances::execute(&client, &resource_group, &name, expand.as_deref()).await?;
+            output::print_output(&value, output_format)
+        }
+        VmssCommand::ListSkus { name, resource_group } => {
+            let value = commands::vmss::list_skus::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format)
+        }
+        VmssCommand::ListInstancePublicIps { name, resource_group } => {
+            let value = commands::vmss::list_instance_public_ips::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format)
+        }
+        VmssCommand::ListInstanceConnectionInfo { name, resource_group } => {
+            let value = commands::vmss::list_instance_connection_info::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format)
+        }
+        VmssCommand::Scale { name, resource_group, new_capacity } => {
+            commands::vmss::scale::execute(&client, &resource_group, &name, new_capacity).await
+        }
+        VmssCommand::Start { name, resource_group, instance_ids } => {
+            commands::vmss::start::execute(&client, &resource_group, &name, instance_ids.as_deref()).await
+        }
+        VmssCommand::Stop { name, resource_group, instance_ids } => {
+            commands::vmss::stop::execute(&client, &resource_group, &name, instance_ids.as_deref()).await
+        }
+        VmssCommand::UpdateInstances { name, resource_group, instance_ids } => {
+            commands::vmss::update_instances::execute(&client, &resource_group, &name, &instance_ids).await
+        }
+        VmssCommand::Wait { name, resource_group, created, updated, deleted, exists, interval, timeout } => {
+            commands::vmss::wait::execute(&client, &resource_group, &name, created, updated, deleted, exists, interval, timeout).await
         }
     }
 }

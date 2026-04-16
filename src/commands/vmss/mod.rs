@@ -1,0 +1,11 @@
+pub mod list;
+pub mod list_instance_connection_info;
+pub mod list_instance_public_ips;
+pub mod list_instances;
+pub mod list_skus;
+pub mod scale;
+pub mod show;
+pub mod start;
+pub mod stop;
+pub mod update_instances;
+pub mod wait;
