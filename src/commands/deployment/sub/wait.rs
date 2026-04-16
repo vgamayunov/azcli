@@ -1,11 +1,9 @@
 use anyhow::Result;
 use tracing::info;
-
 use crate::arm_client::ArmClient;
 
 pub async fn execute(
     client: &ArmClient,
-    resource_group: &str,
     name: &str,
     created: bool,
     updated: bool,
@@ -25,7 +23,7 @@ pub async fn execute(
     };
 
     let start = std::time::Instant::now();
-    let base = client.deployment_base_url_group(resource_group);
+    let base = client.deployment_base_url_sub();
     loop {
         if start.elapsed().as_secs() >= timeout {
             anyhow::bail!("Timed out waiting for deployment '{name}'");

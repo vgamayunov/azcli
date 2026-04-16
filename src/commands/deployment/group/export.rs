@@ -3,5 +3,6 @@ use anyhow::Result;
 use crate::arm_client::ArmClient;
 
 pub async fn execute(client: &ArmClient, resource_group: &str, name: &str) -> Result<serde_json::Value> {
-    client.export_deployment(resource_group, name).await
+    let base = client.deployment_base_url_group(resource_group);
+    client.deployment_export(&base, name).await
 }

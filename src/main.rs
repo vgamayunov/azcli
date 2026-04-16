@@ -254,6 +254,18 @@ enum DeploymentCommand {
         #[command(subcommand)]
         command: DeploymentGroupCommand,
     },
+    Sub {
+        #[command(subcommand)]
+        command: DeploymentSubCommand,
+    },
+    Mg {
+        #[command(subcommand)]
+        command: DeploymentMgCommand,
+    },
+    Tenant {
+        #[command(subcommand)]
+        command: DeploymentTenantCommand,
+    },
     Operation {
         #[command(subcommand)]
         command: DeploymentOperationCommand,
@@ -273,6 +285,26 @@ enum DeploymentGroupCommand {
         resource_group: String,
     },
     Export {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+    },
+    Create {
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'f', long)]
+        template_file: Option<String>,
+        #[arg(short = 'u', long)]
+        template_uri: Option<String>,
+        #[arg(short, long)]
+        parameters: Option<String>,
+        #[arg(long, default_value = "Incremental")]
+        mode: String,
+    },
+    Delete {
         #[arg(short, long)]
         name: String,
         #[arg(short, long)]
@@ -335,10 +367,266 @@ enum DeploymentGroupCommand {
 }
 
 #[derive(Subcommand)]
+enum DeploymentSubCommand {
+    List,
+    Show {
+        #[arg(short, long)]
+        name: String,
+    },
+    Export {
+        #[arg(short, long)]
+        name: String,
+    },
+    Create {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        location: String,
+        #[arg(short = 'f', long)]
+        template_file: Option<String>,
+        #[arg(short = 'u', long)]
+        template_uri: Option<String>,
+        #[arg(short, long)]
+        parameters: Option<String>,
+    },
+    Delete {
+        #[arg(short, long)]
+        name: String,
+    },
+    Validate {
+        #[arg(short, long)]
+        name: Option<String>,
+        #[arg(short, long)]
+        location: String,
+        #[arg(short = 'f', long)]
+        template_file: Option<String>,
+        #[arg(short = 'u', long)]
+        template_uri: Option<String>,
+        #[arg(short, long)]
+        parameters: Option<String>,
+    },
+    WhatIf {
+        #[arg(short, long)]
+        name: Option<String>,
+        #[arg(short, long)]
+        location: String,
+        #[arg(short = 'f', long)]
+        template_file: Option<String>,
+        #[arg(short = 'u', long)]
+        template_uri: Option<String>,
+        #[arg(short, long)]
+        parameters: Option<String>,
+        #[arg(long, default_value = "FullResourcePayloads")]
+        result_format: String,
+    },
+    Cancel {
+        #[arg(short, long)]
+        name: String,
+    },
+    Wait {
+        #[arg(short, long)]
+        name: String,
+        #[arg(long)]
+        created: bool,
+        #[arg(long)]
+        updated: bool,
+        #[arg(long)]
+        deleted: bool,
+        #[arg(long)]
+        exists: bool,
+        #[arg(long, default_value_t = 30)]
+        interval: u64,
+        #[arg(long, default_value_t = 3600)]
+        timeout: u64,
+    },
+}
+
+#[derive(Subcommand)]
+enum DeploymentMgCommand {
+    List {
+        #[arg(short, long)]
+        management_group_id: String,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        management_group_id: String,
+    },
+    Export {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        management_group_id: String,
+    },
+    Create {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        management_group_id: String,
+        #[arg(short, long)]
+        location: String,
+        #[arg(short = 'f', long)]
+        template_file: Option<String>,
+        #[arg(short = 'u', long)]
+        template_uri: Option<String>,
+        #[arg(short, long)]
+        parameters: Option<String>,
+    },
+    Delete {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        management_group_id: String,
+    },
+    Validate {
+        #[arg(short, long)]
+        name: Option<String>,
+        #[arg(short, long)]
+        management_group_id: String,
+        #[arg(short, long)]
+        location: String,
+        #[arg(short = 'f', long)]
+        template_file: Option<String>,
+        #[arg(short = 'u', long)]
+        template_uri: Option<String>,
+        #[arg(short, long)]
+        parameters: Option<String>,
+    },
+    WhatIf {
+        #[arg(short, long)]
+        name: Option<String>,
+        #[arg(short, long)]
+        management_group_id: String,
+        #[arg(short, long)]
+        location: String,
+        #[arg(short = 'f', long)]
+        template_file: Option<String>,
+        #[arg(short = 'u', long)]
+        template_uri: Option<String>,
+        #[arg(short, long)]
+        parameters: Option<String>,
+        #[arg(long, default_value = "FullResourcePayloads")]
+        result_format: String,
+    },
+    Cancel {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        management_group_id: String,
+    },
+    Wait {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        management_group_id: String,
+        #[arg(long)]
+        created: bool,
+        #[arg(long)]
+        updated: bool,
+        #[arg(long)]
+        deleted: bool,
+        #[arg(long)]
+        exists: bool,
+        #[arg(long, default_value_t = 30)]
+        interval: u64,
+        #[arg(long, default_value_t = 3600)]
+        timeout: u64,
+    },
+}
+
+#[derive(Subcommand)]
+enum DeploymentTenantCommand {
+    List,
+    Show {
+        #[arg(short, long)]
+        name: String,
+    },
+    Export {
+        #[arg(short, long)]
+        name: String,
+    },
+    Create {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        location: String,
+        #[arg(short = 'f', long)]
+        template_file: Option<String>,
+        #[arg(short = 'u', long)]
+        template_uri: Option<String>,
+        #[arg(short, long)]
+        parameters: Option<String>,
+    },
+    Delete {
+        #[arg(short, long)]
+        name: String,
+    },
+    Validate {
+        #[arg(short, long)]
+        name: Option<String>,
+        #[arg(short, long)]
+        location: String,
+        #[arg(short = 'f', long)]
+        template_file: Option<String>,
+        #[arg(short = 'u', long)]
+        template_uri: Option<String>,
+        #[arg(short, long)]
+        parameters: Option<String>,
+    },
+    WhatIf {
+        #[arg(short, long)]
+        name: Option<String>,
+        #[arg(short, long)]
+        location: String,
+        #[arg(short = 'f', long)]
+        template_file: Option<String>,
+        #[arg(short = 'u', long)]
+        template_uri: Option<String>,
+        #[arg(short, long)]
+        parameters: Option<String>,
+        #[arg(long, default_value = "FullResourcePayloads")]
+        result_format: String,
+    },
+    Cancel {
+        #[arg(short, long)]
+        name: String,
+    },
+    Wait {
+        #[arg(short, long)]
+        name: String,
+        #[arg(long)]
+        created: bool,
+        #[arg(long)]
+        updated: bool,
+        #[arg(long)]
+        deleted: bool,
+        #[arg(long)]
+        exists: bool,
+        #[arg(long, default_value_t = 30)]
+        interval: u64,
+        #[arg(long, default_value_t = 3600)]
+        timeout: u64,
+    },
+}
+
+#[derive(Subcommand)]
 enum DeploymentOperationCommand {
     Group {
         #[command(subcommand)]
         command: DeploymentOperationGroupCommand,
+    },
+    Sub {
+        #[command(subcommand)]
+        command: DeploymentOperationSubCommand,
+    },
+    Mg {
+        #[command(subcommand)]
+        command: DeploymentOperationMgCommand,
+    },
+    Tenant {
+        #[command(subcommand)]
+        command: DeploymentOperationTenantCommand,
     },
 }
 
@@ -355,6 +643,52 @@ enum DeploymentOperationGroupCommand {
         name: String,
         #[arg(short, long)]
         resource_group: String,
+        #[arg(long)]
+        operation_id: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum DeploymentOperationSubCommand {
+    List {
+        #[arg(short, long)]
+        name: String,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(long)]
+        operation_id: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum DeploymentOperationMgCommand {
+    List {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        management_group_id: String,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        management_group_id: String,
+        #[arg(long)]
+        operation_id: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum DeploymentOperationTenantCommand {
+    List {
+        #[arg(short, long)]
+        name: String,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
         #[arg(long)]
         operation_id: String,
     },
@@ -819,6 +1153,17 @@ async fn handle_deployment(
                 let value = commands::deployment::group::export::execute(&client, &resource_group, &name).await?;
                 output::print_output(&value, output_format)
             }
+            DeploymentGroupCommand::Create { resource_group, name, template_file, template_uri, parameters, mode } => {
+                let value = commands::deployment::group::create::execute(
+                    &client, &resource_group, &name,
+                    template_file.as_deref(), template_uri.as_deref(),
+                    parameters.as_deref(), &mode,
+                ).await?;
+                output::print_output(&value, output_format)
+            }
+            DeploymentGroupCommand::Delete { name, resource_group } => {
+                commands::deployment::group::delete::execute(&client, &resource_group, &name).await
+            }
             DeploymentGroupCommand::Validate { resource_group, name, template_file, template_uri, parameters, mode } => {
                 let deploy_name = name.unwrap_or_else(|| "validation".to_string());
                 let value = commands::deployment::group::validate::execute(
@@ -844,6 +1189,153 @@ async fn handle_deployment(
                 commands::deployment::group::wait::execute(&client, &resource_group, &name, created, updated, deleted, exists, interval, timeout).await
             }
         },
+        DeploymentCommand::Sub { command } => match command {
+            DeploymentSubCommand::List => {
+                let value = commands::deployment::sub::list::execute(&client).await?;
+                output::print_output(&value, output_format)
+            }
+            DeploymentSubCommand::Show { name } => {
+                let value = commands::deployment::sub::show::execute(&client, &name).await?;
+                output::print_output(&value, output_format)
+            }
+            DeploymentSubCommand::Export { name } => {
+                let value = commands::deployment::sub::export::execute(&client, &name).await?;
+                output::print_output(&value, output_format)
+            }
+            DeploymentSubCommand::Create { name, location, template_file, template_uri, parameters } => {
+                let value = commands::deployment::sub::create::execute(
+                    &client, &name, &location,
+                    template_file.as_deref(), template_uri.as_deref(),
+                    parameters.as_deref(),
+                ).await?;
+                output::print_output(&value, output_format)
+            }
+            DeploymentSubCommand::Delete { name } => {
+                commands::deployment::sub::delete::execute(&client, &name).await
+            }
+            DeploymentSubCommand::Validate { name, location, template_file, template_uri, parameters } => {
+                let deploy_name = name.unwrap_or_else(|| "validation".to_string());
+                let value = commands::deployment::sub::validate::execute(
+                    &client, &deploy_name, &location,
+                    template_file.as_deref(), template_uri.as_deref(),
+                    parameters.as_deref(),
+                ).await?;
+                output::print_output(&value, output_format)
+            }
+            DeploymentSubCommand::WhatIf { name, location, template_file, template_uri, parameters, result_format } => {
+                let deploy_name = name.unwrap_or_else(|| "what-if".to_string());
+                let value = commands::deployment::sub::what_if::execute(
+                    &client, &deploy_name, &location,
+                    template_file.as_deref(), template_uri.as_deref(),
+                    parameters.as_deref(), Some(&result_format),
+                ).await?;
+                output::print_output(&value, output_format)
+            }
+            DeploymentSubCommand::Cancel { name } => {
+                commands::deployment::sub::cancel::execute(&client, &name).await
+            }
+            DeploymentSubCommand::Wait { name, created, updated, deleted, exists, interval, timeout } => {
+                commands::deployment::sub::wait::execute(&client, &name, created, updated, deleted, exists, interval, timeout).await
+            }
+        },
+        DeploymentCommand::Mg { command } => match command {
+            DeploymentMgCommand::List { management_group_id } => {
+                let value = commands::deployment::mg::list::execute(&client, &management_group_id).await?;
+                output::print_output(&value, output_format)
+            }
+            DeploymentMgCommand::Show { name, management_group_id } => {
+                let value = commands::deployment::mg::show::execute(&client, &management_group_id, &name).await?;
+                output::print_output(&value, output_format)
+            }
+            DeploymentMgCommand::Export { name, management_group_id } => {
+                let value = commands::deployment::mg::export::execute(&client, &management_group_id, &name).await?;
+                output::print_output(&value, output_format)
+            }
+            DeploymentMgCommand::Create { name, management_group_id, location, template_file, template_uri, parameters } => {
+                let value = commands::deployment::mg::create::execute(
+                    &client, &management_group_id, &name, &location,
+                    template_file.as_deref(), template_uri.as_deref(),
+                    parameters.as_deref(),
+                ).await?;
+                output::print_output(&value, output_format)
+            }
+            DeploymentMgCommand::Delete { name, management_group_id } => {
+                commands::deployment::mg::delete::execute(&client, &management_group_id, &name).await
+            }
+            DeploymentMgCommand::Validate { name, management_group_id, location, template_file, template_uri, parameters } => {
+                let deploy_name = name.unwrap_or_else(|| "validation".to_string());
+                let value = commands::deployment::mg::validate::execute(
+                    &client, &management_group_id, &deploy_name, &location,
+                    template_file.as_deref(), template_uri.as_deref(),
+                    parameters.as_deref(),
+                ).await?;
+                output::print_output(&value, output_format)
+            }
+            DeploymentMgCommand::WhatIf { name, management_group_id, location, template_file, template_uri, parameters, result_format } => {
+                let deploy_name = name.unwrap_or_else(|| "what-if".to_string());
+                let value = commands::deployment::mg::what_if::execute(
+                    &client, &management_group_id, &deploy_name, &location,
+                    template_file.as_deref(), template_uri.as_deref(),
+                    parameters.as_deref(), Some(&result_format),
+                ).await?;
+                output::print_output(&value, output_format)
+            }
+            DeploymentMgCommand::Cancel { name, management_group_id } => {
+                commands::deployment::mg::cancel::execute(&client, &management_group_id, &name).await
+            }
+            DeploymentMgCommand::Wait { name, management_group_id, created, updated, deleted, exists, interval, timeout } => {
+                commands::deployment::mg::wait::execute(&client, &management_group_id, &name, created, updated, deleted, exists, interval, timeout).await
+            }
+        },
+        DeploymentCommand::Tenant { command } => match command {
+            DeploymentTenantCommand::List => {
+                let value = commands::deployment::tenant::list::execute(&client).await?;
+                output::print_output(&value, output_format)
+            }
+            DeploymentTenantCommand::Show { name } => {
+                let value = commands::deployment::tenant::show::execute(&client, &name).await?;
+                output::print_output(&value, output_format)
+            }
+            DeploymentTenantCommand::Export { name } => {
+                let value = commands::deployment::tenant::export::execute(&client, &name).await?;
+                output::print_output(&value, output_format)
+            }
+            DeploymentTenantCommand::Create { name, location, template_file, template_uri, parameters } => {
+                let value = commands::deployment::tenant::create::execute(
+                    &client, &name, &location,
+                    template_file.as_deref(), template_uri.as_deref(),
+                    parameters.as_deref(),
+                ).await?;
+                output::print_output(&value, output_format)
+            }
+            DeploymentTenantCommand::Delete { name } => {
+                commands::deployment::tenant::delete::execute(&client, &name).await
+            }
+            DeploymentTenantCommand::Validate { name, location, template_file, template_uri, parameters } => {
+                let deploy_name = name.unwrap_or_else(|| "validation".to_string());
+                let value = commands::deployment::tenant::validate::execute(
+                    &client, &deploy_name, &location,
+                    template_file.as_deref(), template_uri.as_deref(),
+                    parameters.as_deref(),
+                ).await?;
+                output::print_output(&value, output_format)
+            }
+            DeploymentTenantCommand::WhatIf { name, location, template_file, template_uri, parameters, result_format } => {
+                let deploy_name = name.unwrap_or_else(|| "what-if".to_string());
+                let value = commands::deployment::tenant::what_if::execute(
+                    &client, &deploy_name, &location,
+                    template_file.as_deref(), template_uri.as_deref(),
+                    parameters.as_deref(), Some(&result_format),
+                ).await?;
+                output::print_output(&value, output_format)
+            }
+            DeploymentTenantCommand::Cancel { name } => {
+                commands::deployment::tenant::cancel::execute(&client, &name).await
+            }
+            DeploymentTenantCommand::Wait { name, created, updated, deleted, exists, interval, timeout } => {
+                commands::deployment::tenant::wait::execute(&client, &name, created, updated, deleted, exists, interval, timeout).await
+            }
+        },
         DeploymentCommand::Operation { command } => match command {
             DeploymentOperationCommand::Group { command } => match command {
                 DeploymentOperationGroupCommand::List { name, resource_group } => {
@@ -852,6 +1344,36 @@ async fn handle_deployment(
                 }
                 DeploymentOperationGroupCommand::Show { name, resource_group, operation_id } => {
                     let value = commands::deployment::operation::group::show::execute(&client, &resource_group, &name, &operation_id).await?;
+                    output::print_output(&value, output_format)
+                }
+            },
+            DeploymentOperationCommand::Sub { command } => match command {
+                DeploymentOperationSubCommand::List { name } => {
+                    let value = commands::deployment::operation::sub::list::execute(&client, &name).await?;
+                    output::print_output(&value, output_format)
+                }
+                DeploymentOperationSubCommand::Show { name, operation_id } => {
+                    let value = commands::deployment::operation::sub::show::execute(&client, &name, &operation_id).await?;
+                    output::print_output(&value, output_format)
+                }
+            },
+            DeploymentOperationCommand::Mg { command } => match command {
+                DeploymentOperationMgCommand::List { name, management_group_id } => {
+                    let value = commands::deployment::operation::mg::list::execute(&client, &management_group_id, &name).await?;
+                    output::print_output(&value, output_format)
+                }
+                DeploymentOperationMgCommand::Show { name, management_group_id, operation_id } => {
+                    let value = commands::deployment::operation::mg::show::execute(&client, &management_group_id, &name, &operation_id).await?;
+                    output::print_output(&value, output_format)
+                }
+            },
+            DeploymentOperationCommand::Tenant { command } => match command {
+                DeploymentOperationTenantCommand::List { name } => {
+                    let value = commands::deployment::operation::tenant::list::execute(&client, &name).await?;
+                    output::print_output(&value, output_format)
+                }
+                DeploymentOperationTenantCommand::Show { name, operation_id } => {
+                    let value = commands::deployment::operation::tenant::show::execute(&client, &name, &operation_id).await?;
                     output::print_output(&value, output_format)
                 }
             },

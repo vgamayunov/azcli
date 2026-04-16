@@ -10,7 +10,6 @@ pub async fn execute(
     template_uri: Option<&str>,
     parameters: Option<&str>,
     mode: &str,
-    result_format: Option<&str>,
 ) -> Result<serde_json::Value> {
     let template = super::validate::load_template(template_file, template_uri)?;
     let params = super::validate::load_parameters(parameters)?;
@@ -22,11 +21,8 @@ pub async fn execute(
     if let Some(p) = params {
         properties["parameters"] = p;
     }
-    if let Some(rf) = result_format {
-        properties["whatIfSettings"] = serde_json::json!({ "resultFormat": rf });
-    }
 
     let body = serde_json::json!({ "properties": properties });
     let base = client.deployment_base_url_group(resource_group);
-    client.deployment_what_if(&base, name, body).await
+    client.deployment_create(&base, name, body).await
 }

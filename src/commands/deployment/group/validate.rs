@@ -23,7 +23,8 @@ pub async fn execute(
     }
 
     let body = serde_json::json!({ "properties": properties });
-    client.validate_deployment(resource_group, name, body).await
+    let base = client.deployment_base_url_group(resource_group);
+    client.deployment_validate(&base, name, body).await
 }
 
 pub fn load_template(file: Option<&str>, uri: Option<&str>) -> Result<serde_json::Value> {

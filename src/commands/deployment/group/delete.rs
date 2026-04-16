@@ -4,9 +4,9 @@ use tracing::info;
 use crate::arm_client::ArmClient;
 
 pub async fn execute(client: &ArmClient, resource_group: &str, name: &str) -> Result<()> {
-    info!("Cancelling deployment '{name}'...");
+    info!("Deleting deployment '{name}'...");
     let base = client.deployment_base_url_group(resource_group);
-    client.deployment_cancel(&base, name).await?;
-    eprintln!("Deployment '{name}' cancel initiated.");
+    client.deployment_delete(&base, name).await?;
+    eprintln!("Deployment '{name}' deleted.");
     Ok(())
 }

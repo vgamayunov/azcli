@@ -367,11 +367,33 @@ impl ArmClient {
         }
     }
 
-    pub async fn list_deployments(&self, resource_group: &str) -> Result<serde_json::Value> {
-        let url = format!(
-            "https://management.azure.com/subscriptions/{}/resourcegroups/{}/providers/Microsoft.Resources/deployments?api-version={}",
-            self.subscription_id, resource_group, DEPLOYMENT_API_VERSION
-        );
+    pub fn deployment_base_url_group(&self, resource_group: &str) -> String {
+        format!(
+            "https://management.azure.com/subscriptions/{}/resourcegroups/{}/providers/Microsoft.Resources/deployments",
+            self.subscription_id, resource_group
+        )
+    }
+
+    pub fn deployment_base_url_sub(&self) -> String {
+        format!(
+            "https://management.azure.com/subscriptions/{}/providers/Microsoft.Resources/deployments",
+            self.subscription_id
+        )
+    }
+
+    pub fn deployment_base_url_mg(mg_id: &str) -> String {
+        format!(
+            "https://management.azure.com/providers/Microsoft.Management/managementGroups/{}/providers/Microsoft.Resources/deployments",
+            mg_id
+        )
+    }
+
+    pub fn deployment_base_url_tenant() -> String {
+        "https://management.azure.com/providers/Microsoft.Resources/deployments".to_string()
+    }
+
+    pub async fn deployment_list(&self, base_url: &str) -> Result<serde_json::Value> {
+        let url = format!("{base_url}?api-version={DEPLOYMENT_API_VERSION}");
         debug!("GET {url}");
         let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
             .context("Failed to list deployments")?;
@@ -383,11 +405,8 @@ impl ArmClient {
         resp.json().await.context("Failed to parse deployments list")
     }
 
-    pub async fn show_deployment(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
-        let url = format!(
-            "https://management.azure.com/subscriptions/{}/resourcegroups/{}/providers/Microsoft.Resources/deployments/{}?api-version={}",
-            self.subscription_id, resource_group, name, DEPLOYMENT_API_VERSION
-        );
+    pub async fn deployment_show(&self, base_url: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!("{base_url}/{name}?api-version={DEPLOYMENT_API_VERSION}");
         debug!("GET {url}");
         let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
             .context("Failed to get deployment")?;
@@ -399,11 +418,8 @@ impl ArmClient {
         resp.json().await.context("Failed to parse deployment response")
     }
 
-    pub async fn export_deployment(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
-        let url = format!(
-            "https://management.azure.com/subscriptions/{}/resourcegroups/{}/providers/Microsoft.Resources/deployments/{}/exportTemplate?api-version={}",
-            self.subscription_id, resource_group, name, DEPLOYMENT_API_VERSION
-        );
+    pub async fn deployment_export(&self, base_url: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!("{base_url}/{name}/exportTemplate?api-version={DEPLOYMENT_API_VERSION}");
         debug!("POST {url}");
         let resp = self.client.post(&url).bearer_auth(&self.access_token)
             .header("Content-Length", "0").send().await
@@ -416,23 +432,45 @@ impl ArmClient {
         resp.json().await.context("Failed to parse exported template")
     }
 
-    pub async fn validate_deployment(&self, resource_group: &str, name: &str, body: serde_json::Value) -> Result<serde_json::Value> {
-        let url = format!(
-            "https://management.azure.com/subscriptions/{}/resourcegroups/{}/providers/Microsoft.Resources/deployments/{}/validate?api-version={}",
-            self.subscription_id, resource_group, name, DEPLOYMENT_API_VERSION
-        );
+    pub async fn deployment_create(&self, base_url: &str, name: &str, body: serde_json::Value) -> Result<serde_json::Value> {
+        let url = format!("{base_url}/{name}?api-version={DEPLOYMENT_API_VERSION}");
+        debug!("PUT {url}");
+        let resp = self.client.put(&url).bearer_auth(&self.access_token).json(&body).send().await
+            .context("Failed to create deployment")?;
+        match resp.status().as_u16() {
+            200 | 201 => resp.json().await.context("Failed to parse deployment response"),
+            status => {
+                let body = resp.text().await.unwrap_or_default();
+                anyhow::bail!("Create deployment failed ({status}): {body}");
+            }
+        }
+    }
+
+    pub async fn deployment_delete(&self, base_url: &str, name: &str) -> Result<()> {
+        let url = format!("{base_url}/{name}?api-version={DEPLOYMENT_API_VERSION}");
+        debug!("DELETE {url}");
+        let resp = self.client.delete(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to delete deployment")?;
+        match resp.status().as_u16() {
+            200 | 202 | 204 => Ok(()),
+            status => {
+                let body = resp.text().await.unwrap_or_default();
+                anyhow::bail!("Delete deployment failed ({status}): {body}");
+            }
+        }
+    }
+
+    // ARM returns 200 on valid, 400 on invalid — both are useful JSON
+    pub async fn deployment_validate(&self, base_url: &str, name: &str, body: serde_json::Value) -> Result<serde_json::Value> {
+        let url = format!("{base_url}/{name}/validate?api-version={DEPLOYMENT_API_VERSION}");
         debug!("POST {url}");
         let resp = self.client.post(&url).bearer_auth(&self.access_token).json(&body).send().await
             .context("Failed to validate deployment")?;
-        // ARM returns 200 on valid, 400 on invalid — both are useful JSON
         resp.json().await.context("Failed to parse validation response")
     }
 
-    pub async fn what_if_deployment(&self, resource_group: &str, name: &str, body: serde_json::Value) -> Result<serde_json::Value> {
-        let url = format!(
-            "https://management.azure.com/subscriptions/{}/resourcegroups/{}/providers/Microsoft.Resources/deployments/{}/whatIf?api-version={}",
-            self.subscription_id, resource_group, name, DEPLOYMENT_API_VERSION
-        );
+    pub async fn deployment_what_if(&self, base_url: &str, name: &str, body: serde_json::Value) -> Result<serde_json::Value> {
+        let url = format!("{base_url}/{name}/whatIf?api-version={DEPLOYMENT_API_VERSION}");
         debug!("POST {url}");
         let resp = self.client.post(&url).bearer_auth(&self.access_token).json(&body).send().await
             .context("Failed to execute what-if")?;
@@ -468,11 +506,8 @@ impl ArmClient {
         }
     }
 
-    pub async fn cancel_deployment(&self, resource_group: &str, name: &str) -> Result<()> {
-        let url = format!(
-            "https://management.azure.com/subscriptions/{}/resourcegroups/{}/providers/Microsoft.Resources/deployments/{}/cancel?api-version={}",
-            self.subscription_id, resource_group, name, DEPLOYMENT_API_VERSION
-        );
+    pub async fn deployment_cancel(&self, base_url: &str, name: &str) -> Result<()> {
+        let url = format!("{base_url}/{name}/cancel?api-version={DEPLOYMENT_API_VERSION}");
         debug!("POST {url}");
         let resp = self.client.post(&url).bearer_auth(&self.access_token)
             .header("Content-Length", "0").send().await
@@ -486,11 +521,8 @@ impl ArmClient {
         }
     }
 
-    pub async fn list_deployment_operations(&self, resource_group: &str, deployment_name: &str) -> Result<serde_json::Value> {
-        let url = format!(
-            "https://management.azure.com/subscriptions/{}/resourcegroups/{}/providers/Microsoft.Resources/deployments/{}/operations?api-version={}",
-            self.subscription_id, resource_group, deployment_name, DEPLOYMENT_API_VERSION
-        );
+    pub async fn deployment_operations_list(&self, base_url: &str, deployment_name: &str) -> Result<serde_json::Value> {
+        let url = format!("{base_url}/{deployment_name}/operations?api-version={DEPLOYMENT_API_VERSION}");
         debug!("GET {url}");
         let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
             .context("Failed to list deployment operations")?;
@@ -502,11 +534,8 @@ impl ArmClient {
         resp.json().await.context("Failed to parse deployment operations")
     }
 
-    pub async fn show_deployment_operation(&self, resource_group: &str, deployment_name: &str, operation_id: &str) -> Result<serde_json::Value> {
-        let url = format!(
-            "https://management.azure.com/subscriptions/{}/resourcegroups/{}/providers/Microsoft.Resources/deployments/{}/operations/{}?api-version={}",
-            self.subscription_id, resource_group, deployment_name, operation_id, DEPLOYMENT_API_VERSION
-        );
+    pub async fn deployment_operations_show(&self, base_url: &str, deployment_name: &str, operation_id: &str) -> Result<serde_json::Value> {
+        let url = format!("{base_url}/{deployment_name}/operations/{operation_id}?api-version={DEPLOYMENT_API_VERSION}");
         debug!("GET {url}");
         let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
             .context("Failed to get deployment operation")?;
