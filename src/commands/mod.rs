@@ -3,6 +3,7 @@ pub mod delete;
 pub mod group;
 pub mod list;
 pub mod rdp;
+pub mod rest;
 pub mod show;
 pub mod ssh;
 pub mod tunnel;

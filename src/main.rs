@@ -70,6 +70,32 @@ enum CliCommand {
         #[command(subcommand)]
         command: NetworkCommand,
     },
+
+    Rest {
+        #[arg(short = 'u', long = "url", alias = "uri")]
+        url: String,
+
+        #[arg(short = 'm', long, default_value = "get")]
+        method: String,
+
+        #[arg(short = 'b', long)]
+        body: Option<String>,
+
+        #[arg(long, value_parser = parse_key_val, num_args = 1..)]
+        headers: Option<Vec<(String, String)>>,
+
+        #[arg(long = "uri-parameters", alias = "url-parameters", value_parser = parse_key_val, num_args = 1..)]
+        uri_parameters: Option<Vec<(String, String)>>,
+
+        #[arg(long)]
+        resource: Option<String>,
+
+        #[arg(long)]
+        skip_authorization_header: bool,
+
+        #[arg(long)]
+        output_file: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -393,6 +419,49 @@ async fn main() -> anyhow::Result<()> {
                 Ok(())
             }
         },
+
+        CliCommand::Rest {
+            url,
+            method,
+            body,
+            headers,
+            uri_parameters,
+            resource: _,
+            skip_authorization_header,
+            output_file,
+        } => {
+            let (access_token, subscription_id) = if skip_authorization_header {
+                (None, subscription)
+            } else {
+                let mut provider = auth::TokenProvider::load(subscription)?;
+                let token = provider.get_access_token().await?;
+                let sub = provider.get_subscription_id_or_fallback().await.ok();
+                (Some(token), sub)
+            };
+
+            let headers_vec = headers.unwrap_or_default();
+            let params_vec = uri_parameters.unwrap_or_default();
+
+            let value = commands::rest::execute(
+                access_token.as_deref(),
+                &url,
+                &method,
+                body.as_deref(),
+                if headers_vec.is_empty() { None } else { Some(&headers_vec) },
+                if params_vec.is_empty() { None } else { Some(&params_vec) },
+                skip_authorization_header,
+                subscription_id.as_deref(),
+            ).await?;
+
+            if let Some(path) = output_file {
+                let content = serde_json::to_string_pretty(&value)?;
+                std::fs::write(&path, &content)?;
+                eprintln!("Response saved to {path}");
+                Ok(())
+            } else {
+                output::print_output(&value, output_format)
+            }
+        }
     }
 }
 
