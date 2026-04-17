@@ -1,6 +1,6 @@
 # Virtual Machines
 
-All 29 `az vm` top-level commands are implemented. Subgroups (disk, nic, extension, identity, run-command, etc.) are not yet implemented.
+All 29 `az vm` top-level commands are implemented. Subgroups: [`vm disk`](managed-disks.md) is implemented; nic, extension, identity, run-command, etc. are not yet implemented.
 
 ## Query & Info
 

@@ -5,6 +5,7 @@ pub mod convert;
 pub mod create;
 pub mod deallocate;
 pub mod delete_vm;
+pub mod disk;
 pub mod generalize;
 pub mod get_instance_view;
 pub mod install_patches;

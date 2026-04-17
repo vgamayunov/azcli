@@ -10,6 +10,8 @@ const DEPLOYMENT_API_VERSION: &str = "2024-03-01";
 const NETWORK_API_VERSION: &str = "2023-11-01";
 const SKU_API_VERSION: &str = "2021-07-01";
 const DEVTESTLAB_API_VERSION: &str = "2018-09-15";
+const DISK_API_VERSION: &str = "2023-04-02";
+const RESOURCE_SKU_API_VERSION: &str = "2021-07-01";
 
 #[derive(Clone)]
 pub struct ArmClient {
@@ -894,5 +896,172 @@ impl ArmClient {
             anyhow::bail!("Get deployment operation failed ({status}): {body}");
         }
         resp.json().await.context("Failed to parse deployment operation")
+    }
+
+    pub async fn list_disks(&self, resource_group: Option<&str>) -> Result<serde_json::Value> {
+        let url = match resource_group {
+            Some(rg) => format!(
+                "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/disks?api-version={}",
+                self.subscription_id, rg, DISK_API_VERSION
+            ),
+            None => format!(
+                "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/disks?api-version={}",
+                self.subscription_id, DISK_API_VERSION
+            ),
+        };
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to list disks")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("List disks failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse disks list")
+    }
+
+    pub async fn show_disk(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/disks/{}?api-version={}",
+            self.subscription_id, resource_group, name, DISK_API_VERSION
+        );
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to get disk")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Get disk failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse disk response")
+    }
+
+    pub async fn list_disk_skus(&self) -> Result<serde_json::Value> {
+        // Microsoft.Compute/skus filtered to disks; mirrors `az disk list-skus`.
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/skus?api-version={}&$filter=resourceType%20eq%20%27disks%27",
+            self.subscription_id, RESOURCE_SKU_API_VERSION
+        );
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to list disk SKUs")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("List disk SKUs failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse disk SKUs")
+    }
+
+    pub async fn create_disk(&self, resource_group: &str, name: &str, body: serde_json::Value) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/disks/{}?api-version={}",
+            self.subscription_id, resource_group, name, DISK_API_VERSION
+        );
+        debug!("PUT {url}");
+        let resp = self.client.put(&url).bearer_auth(&self.access_token).json(&body).send().await
+            .context("Failed to create disk")?;
+        match resp.status().as_u16() {
+            200 | 201 | 202 => resp.json().await.context("Failed to parse create disk response"),
+            status => {
+                let body = resp.text().await.unwrap_or_default();
+                anyhow::bail!("Create disk failed ({status}): {body}");
+            }
+        }
+    }
+
+    pub async fn update_disk(&self, resource_group: &str, name: &str, body: serde_json::Value) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/disks/{}?api-version={}",
+            self.subscription_id, resource_group, name, DISK_API_VERSION
+        );
+        debug!("PATCH {url}");
+        let resp = self.client.patch(&url).bearer_auth(&self.access_token).json(&body).send().await
+            .context("Failed to update disk")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Update disk failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse update disk response")
+    }
+
+    pub async fn delete_disk(&self, resource_group: &str, name: &str) -> Result<()> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/disks/{}?api-version={}",
+            self.subscription_id, resource_group, name, DISK_API_VERSION
+        );
+        debug!("DELETE {url}");
+        let resp = self.client.delete(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to delete disk")?;
+        match resp.status().as_u16() {
+            200 | 202 | 204 => Ok(()),
+            status => {
+                let body = resp.text().await.unwrap_or_default();
+                anyhow::bail!("Delete disk failed ({status}): {body}");
+            }
+        }
+    }
+
+    pub async fn disk_grant_access(&self, resource_group: &str, name: &str, access: &str, duration_in_seconds: i64) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/disks/{}/beginGetAccess?api-version={}",
+            self.subscription_id, resource_group, name, DISK_API_VERSION
+        );
+        debug!("POST {url}");
+        let body = serde_json::json!({
+            "access": access,
+            "durationInSeconds": duration_in_seconds,
+        });
+        let resp = self.client.post(&url).bearer_auth(&self.access_token).json(&body).send().await
+            .context("Failed to begin disk access")?;
+
+        let status_code = resp.status().as_u16();
+        if status_code == 200 {
+            return resp.json().await.context("Failed to parse grant access response");
+        }
+        if status_code != 202 {
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Grant disk access failed ({status_code}): {body}");
+        }
+
+        // Poll Azure-AsyncOperation or Location for SAS URL
+        let poll_url = resp.headers().get("Azure-AsyncOperation")
+            .or_else(|| resp.headers().get("Location"))
+            .and_then(|v| v.to_str().ok()).map(|s| s.to_string())
+            .context("Grant disk access returned 202 without poll URL")?;
+
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            debug!("GET {poll_url} (polling grant-access)");
+            let poll_resp = self.client.get(&poll_url).bearer_auth(&self.access_token).send().await
+                .context("Failed to poll grant access")?;
+            match poll_resp.status().as_u16() {
+                200 => return poll_resp.json().await.context("Failed to parse grant access result"),
+                202 => continue,
+                s => {
+                    let body = poll_resp.text().await.unwrap_or_default();
+                    anyhow::bail!("Grant disk access poll failed ({s}): {body}");
+                }
+            }
+        }
+    }
+
+    pub async fn disk_revoke_access(&self, resource_group: &str, name: &str) -> Result<()> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/disks/{}/endGetAccess?api-version={}",
+            self.subscription_id, resource_group, name, DISK_API_VERSION
+        );
+        debug!("POST {url}");
+        let resp = self.client.post(&url).bearer_auth(&self.access_token)
+            .header("Content-Length", "0").send().await
+            .context("Failed to revoke disk access")?;
+        match resp.status().as_u16() {
+            200 | 202 | 204 => Ok(()),
+            status => {
+                let body = resp.text().await.unwrap_or_default();
+                anyhow::bail!("Revoke disk access failed ({status}): {body}");
+            }
+        }
     }
 }

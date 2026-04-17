@@ -71,6 +71,11 @@ enum CliCommand {
         command: VmssCommand,
     },
 
+    Disk {
+        #[command(subcommand)]
+        command: DiskCommand,
+    },
+
     Deployment {
         #[command(subcommand)]
         command: DeploymentCommand,
@@ -382,6 +387,10 @@ enum VmCommand {
         #[arg(long)]
         apply_to_subnet: bool,
     },
+    Disk {
+        #[command(subcommand)]
+        command: VmDiskCommand,
+    },
     Wait {
         #[arg(short, long)]
         name: String,
@@ -399,6 +408,115 @@ enum VmCommand {
         interval: u64,
         #[arg(long, default_value = "3600")]
         timeout: u64,
+    },
+}
+
+#[derive(Subcommand)]
+enum VmDiskCommand {
+    Attach {
+        #[arg(long = "vm-name")]
+        vm_name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(short, long)]
+        name: String,
+        #[arg(long)]
+        new: bool,
+        #[arg(long = "size-gb", short = 'z')]
+        size_gb: Option<i64>,
+        #[arg(long)]
+        sku: Option<String>,
+        #[arg(long)]
+        lun: Option<i64>,
+        #[arg(long)]
+        caching: Option<String>,
+        #[arg(long = "enable-write-accelerator")]
+        enable_write_accelerator: bool,
+    },
+    Detach {
+        #[arg(long = "vm-name")]
+        vm_name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(short, long)]
+        name: String,
+        #[arg(long = "force-detach")]
+        force_detach: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum DiskCommand {
+    List {
+        #[arg(short, long)]
+        resource_group: Option<String>,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+    },
+    #[command(name = "list-skus")]
+    ListSkus {
+        #[arg(short, long)]
+        location: Option<String>,
+        #[arg(short, long)]
+        zone: bool,
+    },
+    Create {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(short, long)]
+        location: Option<String>,
+        #[arg(long = "size-gb", short = 'z')]
+        size_gb: Option<i64>,
+        #[arg(long)]
+        sku: Option<String>,
+        #[arg(long)]
+        source: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long = "hyper-v-generation")]
+        hyper_v_generation: Option<String>,
+        #[arg(long = "os-type")]
+        os_type: Option<String>,
+    },
+    Delete {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+    },
+    Update {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long = "size-gb", short = 'z')]
+        size_gb: Option<i64>,
+        #[arg(long)]
+        sku: Option<String>,
+    },
+    #[command(name = "grant-access")]
+    GrantAccess {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long = "access-level", default_value = "Read")]
+        access_level: String,
+        #[arg(long = "duration-in-seconds", default_value = "3600")]
+        duration_in_seconds: i64,
+    },
+    #[command(name = "revoke-access")]
+    RevokeAccess {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        resource_group: String,
     },
 }
 
@@ -1207,6 +1325,10 @@ async fn main() -> anyhow::Result<()> {
             handle_vmss(command, output_format, subscription).await
         }
 
+        CliCommand::Disk { command } => {
+            handle_disk(command, output_format, subscription).await
+        }
+
         CliCommand::Deployment { command } => {
             handle_deployment(command, output_format, subscription).await
         }
@@ -1408,6 +1530,16 @@ async fn handle_vm(
             let value = commands::vm::open_port::execute(&client, &resource_group, &name, &port, priority, nsg_name.as_deref(), apply_to_subnet).await?;
             output::print_output(&value, output_format)
         }
+        VmCommand::Disk { command } => match command {
+            VmDiskCommand::Attach { vm_name, resource_group, name, new, size_gb, sku, lun, caching, enable_write_accelerator } => {
+                let value = commands::vm::disk::attach::execute(&client, &resource_group, &vm_name, &name, new, size_gb, sku.as_deref(), lun, caching.as_deref(), enable_write_accelerator).await?;
+                output::print_output(&value, output_format)
+            }
+            VmDiskCommand::Detach { vm_name, resource_group, name, force_detach } => {
+                let value = commands::vm::disk::detach::execute(&client, &resource_group, &vm_name, &name, force_detach).await?;
+                output::print_output(&value, output_format)
+            }
+        },
         VmCommand::Wait { name, resource_group, created, updated, deleted, exists, interval, timeout } => {
             commands::vm::vm_wait::execute(&client, &resource_group, &name, created, updated, deleted, exists, interval, timeout).await
         }
@@ -1464,6 +1596,56 @@ async fn handle_vmss(
         }
         VmssCommand::Wait { name, resource_group, created, updated, deleted, exists, interval, timeout } => {
             commands::vmss::wait::execute(&client, &resource_group, &name, created, updated, deleted, exists, interval, timeout).await
+        }
+    }
+}
+
+async fn handle_disk(
+    cmd: DiskCommand,
+    output_format: OutputFormat,
+    subscription: Option<String>,
+) -> anyhow::Result<()> {
+    let mut provider = auth::TokenProvider::load(subscription)?;
+    let access_token = provider.get_access_token().await?;
+    let subscription_id = provider.get_subscription_id_or_fallback().await?;
+
+    let client = arm_client::ArmClient::new(access_token, subscription_id);
+
+    match cmd {
+        DiskCommand::List { resource_group } => {
+            let value = commands::disk::list::execute(&client, resource_group.as_deref()).await?;
+            output::print_output(&value, output_format)
+        }
+        DiskCommand::Show { name, resource_group } => {
+            let value = commands::disk::show::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format)
+        }
+        DiskCommand::ListSkus { location, zone } => {
+            let value = commands::disk::list_skus::execute(&client, location.as_deref(), zone).await?;
+            output::print_output(&value, output_format)
+        }
+        DiskCommand::Create { name, resource_group, location, size_gb, sku, source, zone, hyper_v_generation, os_type } => {
+            let loc = location.as_deref().unwrap_or("eastus");
+            let value = commands::disk::create::execute(
+                &client, &resource_group, &name, loc,
+                size_gb, sku.as_deref(), source.as_deref(),
+                zone.as_deref(), hyper_v_generation.as_deref(), os_type.as_deref(),
+            ).await?;
+            output::print_output(&value, output_format)
+        }
+        DiskCommand::Delete { name, resource_group } => {
+            commands::disk::delete::execute(&client, &resource_group, &name).await
+        }
+        DiskCommand::Update { name, resource_group, size_gb, sku } => {
+            let value = commands::disk::update::execute(&client, &resource_group, &name, size_gb, sku.as_deref()).await?;
+            output::print_output(&value, output_format)
+        }
+        DiskCommand::GrantAccess { name, resource_group, access_level, duration_in_seconds } => {
+            let value = commands::disk::grant_access::execute(&client, &resource_group, &name, &access_level, duration_in_seconds).await?;
+            output::print_output(&value, output_format)
+        }
+        DiskCommand::RevokeAccess { name, resource_group } => {
+            commands::disk::revoke_access::execute(&client, &resource_group, &name).await
         }
     }
 }

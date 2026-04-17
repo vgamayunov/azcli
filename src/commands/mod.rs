@@ -1,6 +1,7 @@
 pub mod create;
 pub mod delete;
 pub mod deployment;
+pub mod disk;
 pub mod group;
 pub mod list;
 pub mod rdp;
