@@ -395,6 +395,11 @@ enum VmCommand {
         #[command(subcommand)]
         command: VmNicCommand,
     },
+    #[command(name = "run-command")]
+    RunCommand {
+        #[command(subcommand)]
+        command: VmRunCommandCommand,
+    },
     Wait {
         #[arg(short, long)]
         name: String,
@@ -494,6 +499,114 @@ enum VmNicCommand {
         nics: Vec<String>,
         #[arg(long = "primary-nic")]
         primary_nic: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum VmRunCommandCommand {
+    Invoke {
+        #[arg(long = "vm-name")]
+        vm_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+        #[arg(long = "command-id")]
+        command_id: String,
+        #[arg(long, num_args = 0..)]
+        scripts: Vec<String>,
+        #[arg(long, num_args = 0..)]
+        parameters: Vec<String>,
+    },
+    List {
+        #[arg(long = "vm-name")]
+        vm_name: Option<String>,
+        #[arg(short = 'g', long)]
+        resource_group: Option<String>,
+        #[arg(short, long)]
+        location: Option<String>,
+        #[arg(long = "expand-instance-view")]
+        expand_instance_view: bool,
+    },
+    Show {
+        #[arg(long = "vm-name")]
+        vm_name: Option<String>,
+        #[arg(short = 'g', long)]
+        resource_group: Option<String>,
+        #[arg(short, long)]
+        name: Option<String>,
+        #[arg(short, long)]
+        location: Option<String>,
+        #[arg(long = "command-id")]
+        command_id: Option<String>,
+        #[arg(long = "instance-view")]
+        instance_view: bool,
+    },
+    Create {
+        #[arg(long = "vm-name")]
+        vm_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        location: Option<String>,
+        #[arg(long)]
+        script: Option<String>,
+        #[arg(long = "script-uri")]
+        script_uri: Option<String>,
+        #[arg(long = "command-id")]
+        command_id: Option<String>,
+        #[arg(long, num_args = 0..)]
+        parameters: Vec<String>,
+        #[arg(long = "protected-parameters", num_args = 0..)]
+        protected_parameters: Vec<String>,
+        #[arg(long = "run-as-user")]
+        run_as_user: Option<String>,
+        #[arg(long = "run-as-password")]
+        run_as_password: Option<String>,
+        #[arg(long = "async-execution")]
+        async_execution: bool,
+        #[arg(long = "timeout-in-seconds")]
+        timeout_in_seconds: Option<i64>,
+        #[arg(long = "output-blob-uri")]
+        output_blob_uri: Option<String>,
+        #[arg(long = "error-blob-uri")]
+        error_blob_uri: Option<String>,
+    },
+    Update {
+        #[arg(long = "vm-name")]
+        vm_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+        #[arg(short, long)]
+        name: String,
+        #[arg(long)]
+        script: Option<String>,
+        #[arg(long = "script-uri")]
+        script_uri: Option<String>,
+        #[arg(long = "command-id")]
+        command_id: Option<String>,
+        #[arg(long, num_args = 0..)]
+        parameters: Vec<String>,
+        #[arg(long = "protected-parameters", num_args = 0..)]
+        protected_parameters: Vec<String>,
+        #[arg(long = "run-as-user")]
+        run_as_user: Option<String>,
+        #[arg(long = "run-as-password")]
+        run_as_password: Option<String>,
+        #[arg(long = "timeout-in-seconds")]
+        timeout_in_seconds: Option<i64>,
+        #[arg(long = "output-blob-uri")]
+        output_blob_uri: Option<String>,
+        #[arg(long = "error-blob-uri")]
+        error_blob_uri: Option<String>,
+    },
+    Delete {
+        #[arg(long = "vm-name")]
+        vm_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+        #[arg(short, long)]
+        name: String,
     },
 }
 
@@ -1611,6 +1724,32 @@ async fn handle_vm(
             }
             VmNicCommand::Set { vm_name, resource_group, nics, primary_nic } => {
                 let value = commands::vm::nic::set::execute(&client, &resource_group, &vm_name, &nics, primary_nic.as_deref()).await?;
+                output::print_output(&value, output_format)
+            }
+        },
+        VmCommand::RunCommand { command } => match command {
+            VmRunCommandCommand::Invoke { vm_name, resource_group, command_id, scripts, parameters } => {
+                let value = commands::vm::run_command::invoke::execute(&client, &resource_group, &vm_name, &command_id, &scripts, &parameters).await?;
+                output::print_output(&value, output_format)
+            }
+            VmRunCommandCommand::List { vm_name, resource_group, location, expand_instance_view } => {
+                let value = commands::vm::run_command::list::execute(&client, resource_group.as_deref(), vm_name.as_deref(), location.as_deref(), expand_instance_view).await?;
+                output::print_output(&value, output_format)
+            }
+            VmRunCommandCommand::Show { vm_name, resource_group, name, location, command_id, instance_view } => {
+                let value = commands::vm::run_command::show::execute(&client, resource_group.as_deref(), vm_name.as_deref(), name.as_deref(), location.as_deref(), command_id.as_deref(), instance_view).await?;
+                output::print_output(&value, output_format)
+            }
+            VmRunCommandCommand::Create { vm_name, resource_group, name, location, script, script_uri, command_id, parameters, protected_parameters, run_as_user, run_as_password, async_execution, timeout_in_seconds, output_blob_uri, error_blob_uri } => {
+                let value = commands::vm::run_command::create::execute(&client, &resource_group, &vm_name, &name, location.as_deref(), script.as_deref(), script_uri.as_deref(), command_id.as_deref(), &parameters, &protected_parameters, run_as_user.as_deref(), run_as_password.as_deref(), async_execution, timeout_in_seconds, output_blob_uri.as_deref(), error_blob_uri.as_deref()).await?;
+                output::print_output(&value, output_format)
+            }
+            VmRunCommandCommand::Update { vm_name, resource_group, name, script, script_uri, command_id, parameters, protected_parameters, run_as_user, run_as_password, timeout_in_seconds, output_blob_uri, error_blob_uri } => {
+                let value = commands::vm::run_command::update::execute(&client, &resource_group, &vm_name, &name, script.as_deref(), script_uri.as_deref(), command_id.as_deref(), &parameters, &protected_parameters, run_as_user.as_deref(), run_as_password.as_deref(), timeout_in_seconds, output_blob_uri.as_deref(), error_blob_uri.as_deref()).await?;
+                output::print_output(&value, output_format)
+            }
+            VmRunCommandCommand::Delete { vm_name, resource_group, name } => {
+                let value = commands::vm::run_command::delete::execute(&client, &resource_group, &vm_name, &name).await?;
                 output::print_output(&value, output_format)
             }
         },

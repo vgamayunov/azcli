@@ -1064,4 +1064,208 @@ impl ArmClient {
             }
         }
     }
+
+    pub async fn vm_run_command_invoke(&self, resource_group: &str, vm_name: &str, body: serde_json::Value) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/virtualMachines/{}/runCommand?api-version={}",
+            self.subscription_id, resource_group, vm_name, COMPUTE_API_VERSION
+        );
+        debug!("POST {url}");
+        let resp = self.client.post(&url).bearer_auth(&self.access_token).json(&body).send().await
+            .context("Failed to invoke run-command")?;
+        let status = resp.status().as_u16();
+        if status == 200 {
+            return resp.json().await.context("Failed to parse run-command response");
+        }
+        if status != 202 {
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Invoke run-command failed ({status}): {body}");
+        }
+        let poll_url = resp.headers().get("Azure-AsyncOperation")
+            .or_else(|| resp.headers().get("Location"))
+            .and_then(|v| v.to_str().ok()).map(|s| s.to_string())
+            .context("run-command returned 202 without poll URL")?;
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            debug!("GET {poll_url} (polling run-command)");
+            let poll_resp = self.client.get(&poll_url).bearer_auth(&self.access_token).send().await
+                .context("Failed to poll run-command")?;
+            match poll_resp.status().as_u16() {
+                200 => return poll_resp.json().await.context("Failed to parse run-command poll result"),
+                202 => continue,
+                s => {
+                    let body = poll_resp.text().await.unwrap_or_default();
+                    anyhow::bail!("run-command poll failed ({s}): {body}");
+                }
+            }
+        }
+    }
+
+    pub async fn list_vm_run_commands(&self, resource_group: &str, vm_name: &str, expand_instance_view: bool) -> Result<serde_json::Value> {
+        let mut url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/virtualMachines/{}/runCommands?api-version={}",
+            self.subscription_id, resource_group, vm_name, COMPUTE_API_VERSION
+        );
+        if expand_instance_view {
+            url.push_str("&$expand=instanceView");
+        }
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to list VM run commands")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("List VM run commands failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse list response")
+    }
+
+    pub async fn show_vm_run_command(&self, resource_group: &str, vm_name: &str, name: &str, instance_view: bool) -> Result<serde_json::Value> {
+        let mut url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/virtualMachines/{}/runCommands/{}?api-version={}",
+            self.subscription_id, resource_group, vm_name, name, COMPUTE_API_VERSION
+        );
+        if instance_view {
+            url.push_str("&$expand=instanceView");
+        }
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to show VM run command")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Show VM run command failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse show response")
+    }
+
+    pub async fn list_builtin_run_commands(&self, location: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/locations/{}/runCommands?api-version={}",
+            self.subscription_id, location, COMPUTE_API_VERSION
+        );
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to list built-in run commands")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("List built-in run commands failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse list response")
+    }
+
+    pub async fn show_builtin_run_command(&self, location: &str, command_id: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/locations/{}/runCommands/{}?api-version={}",
+            self.subscription_id, location, command_id, COMPUTE_API_VERSION
+        );
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to show built-in run command")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Show built-in run command failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse show response")
+    }
+
+    async fn poll_compute_lro(&self, poll_url: &str, op_name: &str) -> Result<serde_json::Value> {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            debug!("GET {poll_url} (polling {op_name})");
+            let resp = self.client.get(poll_url).bearer_auth(&self.access_token).send().await
+                .with_context(|| format!("Failed to poll {op_name}"))?;
+            match resp.status().as_u16() {
+                200 => {
+                    return resp.json().await.or_else(|_| Ok(serde_json::json!({})));
+                },
+                202 => continue,
+                204 => return Ok(serde_json::json!({})),
+                s => {
+                    let body = resp.text().await.unwrap_or_default();
+                    anyhow::bail!("{op_name} poll failed ({s}): {body}");
+                }
+            }
+        }
+    }
+
+    pub async fn create_vm_run_command(&self, resource_group: &str, vm_name: &str, name: &str, body: serde_json::Value) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/virtualMachines/{}/runCommands/{}?api-version={}",
+            self.subscription_id, resource_group, vm_name, name, COMPUTE_API_VERSION
+        );
+        debug!("PUT {url}");
+        let resp = self.client.put(&url).bearer_auth(&self.access_token).json(&body).send().await
+            .context("Failed to create run command")?;
+        let status = resp.status().as_u16();
+        if status == 200 || status == 201 {
+            if let Some(poll) = resp.headers().get("Azure-AsyncOperation").or_else(|| resp.headers().get("Location"))
+                .and_then(|v| v.to_str().ok()).map(|s| s.to_string()) {
+                return self.poll_compute_lro(&poll, "create run-command").await;
+            }
+            return resp.json().await.context("Failed to parse create response");
+        }
+        if status == 202 {
+            let poll_url = resp.headers().get("Azure-AsyncOperation")
+                .or_else(|| resp.headers().get("Location"))
+                .and_then(|v| v.to_str().ok()).map(|s| s.to_string())
+                .context("create returned 202 without poll URL")?;
+            return self.poll_compute_lro(&poll_url, "create run-command").await;
+        }
+        let body = resp.text().await.unwrap_or_default();
+        anyhow::bail!("Create run command failed ({status}): {body}");
+    }
+
+    pub async fn update_vm_run_command(&self, resource_group: &str, vm_name: &str, name: &str, body: serde_json::Value) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/virtualMachines/{}/runCommands/{}?api-version={}",
+            self.subscription_id, resource_group, vm_name, name, COMPUTE_API_VERSION
+        );
+        debug!("PATCH {url}");
+        let resp = self.client.patch(&url).bearer_auth(&self.access_token).json(&body).send().await
+            .context("Failed to update run command")?;
+        let status = resp.status().as_u16();
+        if status == 200 {
+            if let Some(poll) = resp.headers().get("Azure-AsyncOperation").or_else(|| resp.headers().get("Location"))
+                .and_then(|v| v.to_str().ok()).map(|s| s.to_string()) {
+                return self.poll_compute_lro(&poll, "update run-command").await;
+            }
+            return resp.json().await.context("Failed to parse update response");
+        }
+        if status == 202 {
+            let poll_url = resp.headers().get("Azure-AsyncOperation")
+                .or_else(|| resp.headers().get("Location"))
+                .and_then(|v| v.to_str().ok()).map(|s| s.to_string())
+                .context("update returned 202 without poll URL")?;
+            return self.poll_compute_lro(&poll_url, "update run-command").await;
+        }
+        let body = resp.text().await.unwrap_or_default();
+        anyhow::bail!("Update run command failed ({status}): {body}");
+    }
+
+    pub async fn delete_vm_run_command(&self, resource_group: &str, vm_name: &str, name: &str) -> Result<()> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/virtualMachines/{}/runCommands/{}?api-version={}",
+            self.subscription_id, resource_group, vm_name, name, COMPUTE_API_VERSION
+        );
+        debug!("DELETE {url}");
+        let resp = self.client.delete(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to delete run command")?;
+        let status = resp.status().as_u16();
+        if status == 200 || status == 204 {
+            return Ok(());
+        }
+        if status == 202 {
+            let poll_url = resp.headers().get("Azure-AsyncOperation")
+                .or_else(|| resp.headers().get("Location"))
+                .and_then(|v| v.to_str().ok()).map(|s| s.to_string())
+                .context("delete returned 202 without poll URL")?;
+            self.poll_compute_lro(&poll_url, "delete run-command").await?;
+            return Ok(());
+        }
+        let body = resp.text().await.unwrap_or_default();
+        anyhow::bail!("Delete run command failed ({status}): {body}");
+    }
 }

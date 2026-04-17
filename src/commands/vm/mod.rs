@@ -23,6 +23,7 @@ pub mod redeploy;
 pub mod reimage;
 pub mod resize;
 pub mod restart;
+pub mod run_command;
 pub mod show;
 pub mod simulate_eviction;
 pub mod start;

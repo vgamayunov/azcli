@@ -1,6 +1,6 @@
 # Virtual Machines
 
-All 29 `az vm` top-level commands are implemented. Subgroups: [`vm disk`](managed-disks.md) and [`vm nic`](#vm-nic) are implemented; extension, identity, run-command, etc. are not yet implemented.
+All 29 `az vm` top-level commands are implemented. Subgroups: [`vm disk`](managed-disks.md), [`vm nic`](#vm-nic), and [`vm run-command`](#vm-run-command) are implemented; extension, identity, etc. are not yet implemented.
 
 ## Query & Info
 
@@ -88,3 +88,25 @@ Manage NIC attachments on a VM. All operations work on `networkProfile.networkIn
 - Exactly one NIC must be marked primary. If `--primary-nic` is not provided and no existing entry is primary, the first NIC is marked primary automatically
 - `add` / `remove` / `set` issue a VM PATCH on `networkProfile.networkInterfaces` and typically require the VM to be deallocated
 - NIC names are case-insensitive and resolved in the VM's resource group when a bare name is supplied
+
+## vm run-command
+
+Invoke built-in scripts on a VM, or manage persistent run-command resources. `list` and `show` operate in two modes: against a VM (persistent run-commands) or against a location (built-in catalog).
+
+| Command | Description |
+|---------|-------------|
+| `vm run-command invoke --name VM --resource-group RG --command-id ID [--scripts LINE ...] [--parameters K=V ...]` | Execute a built-in command synchronously (legacy action). Returns status messages |
+| `vm run-command list --vm-name VM --resource-group RG` | List persistent run-commands on a VM (with instance view) |
+| `vm run-command list --location LOC` | List built-in run-commands available in a location |
+| `vm run-command show --vm-name VM --resource-group RG --name NAME` | Show a persistent run-command on a VM (with instance view) |
+| `vm run-command show --location LOC --command-id ID` | Show a built-in run-command definition |
+| `vm run-command create --vm-name VM --resource-group RG --name NAME (--script TEXT \| --script-uri URL \| --command-id ID) [--parameters K=V ...] [--protected-parameters K=V ...] [--run-as-user USER] [--run-as-password PWD] [--timeout-in-seconds N] [--output-blob-uri URL] [--error-blob-uri URL] [--location LOC]` | Create or replace a persistent run-command (PUT, LRO) |
+| `vm run-command update --vm-name VM --resource-group RG --name NAME [--script TEXT \| --script-uri URL \| --command-id ID] [--parameters K=V ...] [--protected-parameters K=V ...] [--run-as-user USER] [--run-as-password PWD] [--timeout-in-seconds N] [--output-blob-uri URL] [--error-blob-uri URL]` | Patch a persistent run-command (LRO) |
+| `vm run-command delete --vm-name VM --resource-group RG --name NAME` | Delete a persistent run-command (LRO) |
+
+### Notes
+
+- `invoke` uses the legacy `POST .../runCommand` action. For long-running or stateful workflows, use `create` (persistent resources at `.../runCommands/{name}`)
+- Exactly one source (`--script`, `--script-uri`, `--command-id`) is required on `create` and at most one on `update`
+- `--parameters` and `--protected-parameters` accept `name=value` pairs; protected values are not returned in GETs
+- On `create`, `--location` defaults to the VM's location if omitted
