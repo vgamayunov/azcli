@@ -12,7 +12,7 @@ use serde::Deserialize;
 use tracing::debug;
 
 pub const AZURE_CLI_CLIENT_ID: &str = "04b07795-8ddb-461a-bbee-02f9e1bf7b46";
-pub const MANAGEMENT_SCOPE: &str = "https://management.azure.com/.default";
+pub const MANAGEMENT_SCOPE: &str = "https://management.azure.com/.default offline_access";
 pub const COMMON_TENANT: &str = "organizations";
 
 pub fn token_endpoint(tenant: &str) -> String {
