@@ -15,6 +15,7 @@ pub mod list_sizes;
 pub mod list_skus;
 pub mod list_usage;
 pub mod list_vm_resize_options;
+pub mod nic;
 pub mod open_port;
 pub mod perform_maintenance;
 pub mod reapply;

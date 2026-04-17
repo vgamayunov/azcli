@@ -391,6 +391,10 @@ enum VmCommand {
         #[command(subcommand)]
         command: VmDiskCommand,
     },
+    Nic {
+        #[command(subcommand)]
+        command: VmNicCommand,
+    },
     Wait {
         #[arg(short, long)]
         name: String,
@@ -442,6 +446,54 @@ enum VmDiskCommand {
         name: String,
         #[arg(long = "force-detach")]
         force_detach: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum VmNicCommand {
+    List {
+        #[arg(long = "vm-name")]
+        vm_name: String,
+        #[arg(short, long)]
+        resource_group: String,
+    },
+    Show {
+        #[arg(long = "vm-name")]
+        vm_name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long)]
+        nic: String,
+    },
+    Add {
+        #[arg(long = "vm-name")]
+        vm_name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long, num_args = 1.., required = true)]
+        nics: Vec<String>,
+        #[arg(long = "primary-nic")]
+        primary_nic: Option<String>,
+    },
+    Remove {
+        #[arg(long = "vm-name")]
+        vm_name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long, num_args = 1.., required = true)]
+        nics: Vec<String>,
+        #[arg(long = "primary-nic")]
+        primary_nic: Option<String>,
+    },
+    Set {
+        #[arg(long = "vm-name")]
+        vm_name: String,
+        #[arg(short, long)]
+        resource_group: String,
+        #[arg(long, num_args = 1.., required = true)]
+        nics: Vec<String>,
+        #[arg(long = "primary-nic")]
+        primary_nic: Option<String>,
     },
 }
 
@@ -1537,6 +1589,28 @@ async fn handle_vm(
             }
             VmDiskCommand::Detach { vm_name, resource_group, name, force_detach } => {
                 let value = commands::vm::disk::detach::execute(&client, &resource_group, &vm_name, &name, force_detach).await?;
+                output::print_output(&value, output_format)
+            }
+        },
+        VmCommand::Nic { command } => match command {
+            VmNicCommand::List { vm_name, resource_group } => {
+                let value = commands::vm::nic::list::execute(&client, &resource_group, &vm_name).await?;
+                output::print_output(&value, output_format)
+            }
+            VmNicCommand::Show { vm_name, resource_group, nic } => {
+                let value = commands::vm::nic::show::execute(&client, &resource_group, &vm_name, &nic).await?;
+                output::print_output(&value, output_format)
+            }
+            VmNicCommand::Add { vm_name, resource_group, nics, primary_nic } => {
+                let value = commands::vm::nic::add::execute(&client, &resource_group, &vm_name, &nics, primary_nic.as_deref()).await?;
+                output::print_output(&value, output_format)
+            }
+            VmNicCommand::Remove { vm_name, resource_group, nics, primary_nic } => {
+                let value = commands::vm::nic::remove::execute(&client, &resource_group, &vm_name, &nics, primary_nic.as_deref()).await?;
+                output::print_output(&value, output_format)
+            }
+            VmNicCommand::Set { vm_name, resource_group, nics, primary_nic } => {
+                let value = commands::vm::nic::set::execute(&client, &resource_group, &vm_name, &nics, primary_nic.as_deref()).await?;
                 output::print_output(&value, output_format)
             }
         },

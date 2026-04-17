@@ -1,6 +1,6 @@
 # Virtual Machines
 
-All 29 `az vm` top-level commands are implemented. Subgroups: [`vm disk`](managed-disks.md) is implemented; nic, extension, identity, run-command, etc. are not yet implemented.
+All 29 `az vm` top-level commands are implemented. Subgroups: [`vm disk`](managed-disks.md) and [`vm nic`](#vm-nic) are implemented; extension, identity, run-command, etc. are not yet implemented.
 
 ## Query & Info
 
@@ -70,3 +70,21 @@ All 29 `az vm` top-level commands are implemented. Subgroups: [`vm disk`](manage
 | Command | Description |
 |---------|-------------|
 | `vm wait --name NAME --resource-group RG [--created] [--updated] [--deleted] [--exists]` | Wait for a VM condition |
+
+## vm nic
+
+Manage NIC attachments on a VM. All operations work on `networkProfile.networkInterfaces` of the VM.
+
+| Command | Description |
+|---------|-------------|
+| `vm nic list --vm-name VM --resource-group RG` | List NICs attached to a VM |
+| `vm nic show --vm-name VM --resource-group RG --nic NIC` | Show full NIC details (verifies NIC is attached, then GETs the NIC resource). `NIC` may be a name (resolved in `RG`) or a full resource ID |
+| `vm nic add --vm-name VM --resource-group RG --nics NIC [NIC ...] [--primary-nic NAME]` | Append NICs to the VM (skipping any already attached). If no primary is set, the first entry becomes primary |
+| `vm nic remove --vm-name VM --resource-group RG --nics NIC [NIC ...] [--primary-nic NAME]` | Detach NICs from the VM |
+| `vm nic set --vm-name VM --resource-group RG --nics NIC [NIC ...] [--primary-nic NAME]` | Replace the entire NIC list on the VM |
+
+### Notes
+
+- Exactly one NIC must be marked primary. If `--primary-nic` is not provided and no existing entry is primary, the first NIC is marked primary automatically
+- `add` / `remove` / `set` issue a VM PATCH on `networkProfile.networkInterfaces` and typically require the VM to be deallocated
+- NIC names are case-insensitive and resolved in the VM's resource group when a bare name is supplied
