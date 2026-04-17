@@ -44,7 +44,7 @@ pub async fn execute(
             "timeZoneId": "UTC",
             "targetResourceId": format!(
                 "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/virtualMachines/{name}",
-                sub = "", rg = resource_group, name = name,
+                sub = client.subscription_id(), rg = resource_group, name = name,
             ),
             "notificationSettings": notification_settings,
         }

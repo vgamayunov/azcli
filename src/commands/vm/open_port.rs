@@ -51,7 +51,7 @@ pub async fn execute(
             let location = vm_val.get("location").and_then(|v| v.as_str()).unwrap_or("eastus");
             let new_nsg_id = format!(
                 "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Network/networkSecurityGroups/{nsg}",
-                sub = "", rg = resource_group, nsg = nsg_n,
+                sub = client.subscription_id(), rg = resource_group, nsg = nsg_n,
             );
             let nsg_body = serde_json::json!({
                 "location": location,
