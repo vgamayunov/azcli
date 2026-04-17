@@ -130,25 +130,25 @@ enum GroupCommand {
 #[derive(Subcommand)]
 enum VmCommand {
     List {
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: Option<String>,
     },
     Show {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
     },
     Start {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
     },
     Stop {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long)]
         no_wait: bool,
@@ -156,7 +156,7 @@ enum VmCommand {
     Deallocate {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long)]
         no_wait: bool,
@@ -165,14 +165,14 @@ enum VmCommand {
     GetInstanceView {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
     },
     #[command(name = "list-ip-addresses")]
     ListIpAddresses {
         #[arg(short, long)]
         name: Option<String>,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: Option<String>,
     },
     #[command(name = "list-sizes")]
@@ -200,13 +200,13 @@ enum VmCommand {
     ListVmResizeOptions {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
     },
     Restart {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long)]
         no_wait: bool,
@@ -214,7 +214,7 @@ enum VmCommand {
     Create {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long)]
         image: String,
@@ -244,7 +244,7 @@ enum VmCommand {
     Delete {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long)]
         force_deletion: bool,
@@ -254,7 +254,7 @@ enum VmCommand {
     Update {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long, num_args = 1..)]
         set: Vec<String>,
@@ -264,7 +264,7 @@ enum VmCommand {
     Resize {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long)]
         size: String,
@@ -274,7 +274,7 @@ enum VmCommand {
     Redeploy {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long)]
         no_wait: bool,
@@ -282,7 +282,7 @@ enum VmCommand {
     Reimage {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long)]
         no_wait: bool,
@@ -290,7 +290,7 @@ enum VmCommand {
     Reapply {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long)]
         no_wait: bool,
@@ -299,26 +299,26 @@ enum VmCommand {
     PerformMaintenance {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
     },
     #[command(name = "simulate-eviction")]
     SimulateEviction {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
     },
     Generalize {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
     },
     Capture {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long)]
         vhd_name_prefix: String,
@@ -330,21 +330,21 @@ enum VmCommand {
     Convert {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
     },
     #[command(name = "assess-patches")]
     AssessPatches {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
     },
     #[command(name = "install-patches")]
     InstallPatches {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long)]
         maximum_duration: String,
@@ -359,7 +359,7 @@ enum VmCommand {
     AutoShutdown {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long)]
         time: Option<String>,
@@ -376,7 +376,7 @@ enum VmCommand {
     OpenPort {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long)]
         port: String,
@@ -398,7 +398,7 @@ enum VmCommand {
     Wait {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long)]
         created: bool,
@@ -420,7 +420,7 @@ enum VmDiskCommand {
     Attach {
         #[arg(long = "vm-name")]
         vm_name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(short, long)]
         name: String,
@@ -440,7 +440,7 @@ enum VmDiskCommand {
     Detach {
         #[arg(long = "vm-name")]
         vm_name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(short, long)]
         name: String,
@@ -454,13 +454,13 @@ enum VmNicCommand {
     List {
         #[arg(long = "vm-name")]
         vm_name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
     },
     Show {
         #[arg(long = "vm-name")]
         vm_name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long)]
         nic: String,
@@ -468,7 +468,7 @@ enum VmNicCommand {
     Add {
         #[arg(long = "vm-name")]
         vm_name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long, num_args = 1.., required = true)]
         nics: Vec<String>,
@@ -478,7 +478,7 @@ enum VmNicCommand {
     Remove {
         #[arg(long = "vm-name")]
         vm_name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long, num_args = 1.., required = true)]
         nics: Vec<String>,
@@ -488,7 +488,7 @@ enum VmNicCommand {
     Set {
         #[arg(long = "vm-name")]
         vm_name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long, num_args = 1.., required = true)]
         nics: Vec<String>,
@@ -500,13 +500,13 @@ enum VmNicCommand {
 #[derive(Subcommand)]
 enum DiskCommand {
     List {
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: Option<String>,
     },
     Show {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
     },
     #[command(name = "list-skus")]
@@ -519,7 +519,7 @@ enum DiskCommand {
     Create {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(short, long)]
         location: Option<String>,
@@ -539,13 +539,13 @@ enum DiskCommand {
     Delete {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
     },
     Update {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long = "size-gb", short = 'z')]
         size_gb: Option<i64>,
@@ -556,7 +556,7 @@ enum DiskCommand {
     GrantAccess {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long = "access-level", default_value = "Read")]
         access_level: String,
@@ -567,7 +567,7 @@ enum DiskCommand {
     RevokeAccess {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
     },
 }
@@ -575,19 +575,19 @@ enum DiskCommand {
 #[derive(Subcommand)]
 enum VmssCommand {
     List {
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: Option<String>,
     },
     Show {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
     },
     ListInstances {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long)]
         expand: Option<String>,
@@ -595,25 +595,25 @@ enum VmssCommand {
     ListSkus {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
     },
     ListInstancePublicIps {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
     },
     ListInstanceConnectionInfo {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
     },
     Scale {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long)]
         new_capacity: i64,
@@ -621,7 +621,7 @@ enum VmssCommand {
     Start {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long, num_args = 1..)]
         instance_ids: Option<Vec<String>>,
@@ -629,7 +629,7 @@ enum VmssCommand {
     Stop {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long, num_args = 1..)]
         instance_ids: Option<Vec<String>>,
@@ -637,7 +637,7 @@ enum VmssCommand {
     UpdateInstances {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long, num_args = 1.., required = true)]
         instance_ids: Vec<String>,
@@ -645,7 +645,7 @@ enum VmssCommand {
     Wait {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long)]
         created: bool,
@@ -689,23 +689,23 @@ enum DeploymentCommand {
 #[derive(Subcommand)]
 enum DeploymentGroupCommand {
     List {
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
     },
     Show {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
     },
     Export {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
     },
     Create {
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(short, long)]
         name: String,
@@ -721,11 +721,11 @@ enum DeploymentGroupCommand {
     Delete {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
     },
     Validate {
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(short, long)]
         name: Option<String>,
@@ -739,7 +739,7 @@ enum DeploymentGroupCommand {
         mode: String,
     },
     WhatIf {
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(short, long)]
         name: Option<String>,
@@ -757,13 +757,13 @@ enum DeploymentGroupCommand {
     Cancel {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
     },
     Wait {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long)]
         created: bool,
@@ -1049,13 +1049,13 @@ enum DeploymentOperationGroupCommand {
     List {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
     },
     Show {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long)]
         operation_id: String,
@@ -1121,7 +1121,7 @@ enum BastionCommand {
     Create {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(short, long)]
         location: String,
@@ -1165,23 +1165,23 @@ enum BastionCommand {
     Delete {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
     },
     List {
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: Option<String>,
     },
     Show {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
     },
     Update {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long, value_enum)]
         sku: Option<BastionSku>,
@@ -1216,7 +1216,7 @@ enum BastionCommand {
     Ssh {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long, value_enum)]
         auth_type: AuthType,
@@ -1236,7 +1236,7 @@ enum BastionCommand {
     Rdp {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long)]
         target_resource_id: Option<String>,
@@ -1259,7 +1259,7 @@ enum BastionCommand {
     Tunnel {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         #[arg(long)]
         target_resource_id: Option<String>,
@@ -1275,7 +1275,7 @@ enum BastionCommand {
     Wait {
         #[arg(short, long)]
         name: String,
-        #[arg(short, long)]
+        #[arg(short = 'g', long)]
         resource_group: String,
         /// Wait until created.
         #[arg(long)]
