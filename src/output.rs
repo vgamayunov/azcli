@@ -186,6 +186,20 @@ fn pick_table_columns(sample: &serde_json::Value) -> Vec<String> {
         None => return vec![],
     };
 
+    // Compute SKU shape (vm/disk/vmss list-skus): match az's column set exactly.
+    if obj.contains_key("resourceType")
+        && obj.contains_key("capabilities")
+        && obj.contains_key("locationInfo")
+    {
+        return vec![
+            "@resourceType".to_string(),
+            "@locations".to_string(),
+            "@name".to_string(),
+            "@zones".to_string(),
+            "@restrictions".to_string(),
+        ];
+    }
+
     let preferred = [
         "name",
         "location",
@@ -222,18 +236,87 @@ fn resolve_path<'a>(value: &'a serde_json::Value, path: &str) -> Option<&'a serd
 }
 
 fn extract_field(item: &serde_json::Value, path: &str) -> String {
-    match resolve_path(item, path) {
-        Some(serde_json::Value::String(s)) => s.clone(),
-        Some(serde_json::Value::Null) => String::new(),
-        Some(serde_json::Value::Bool(b)) => b.to_string(),
-        Some(serde_json::Value::Number(n)) => n.to_string(),
-        Some(other) => other.to_string(),
-        None => String::new(),
+    match path {
+        "@resourceType" => resolve_path(item, "resourceType")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
+        "@name" => resolve_path(item, "name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
+        "@locations" => join_string_array(item.get("locations")),
+        "@zones" => item
+            .get("locationInfo")
+            .and_then(|v| v.as_array())
+            .and_then(|arr| arr.first())
+            .map(|li| join_string_array(li.get("zones")))
+            .unwrap_or_default(),
+        "@restrictions" => summarize_restrictions(item.get("restrictions")),
+        _ => match resolve_path(item, path) {
+            Some(serde_json::Value::String(s)) => s.clone(),
+            Some(serde_json::Value::Null) => String::new(),
+            Some(serde_json::Value::Bool(b)) => b.to_string(),
+            Some(serde_json::Value::Number(n)) => n.to_string(),
+            Some(other) => other.to_string(),
+            None => String::new(),
+        },
     }
 }
 
+fn join_string_array(value: Option<&serde_json::Value>) -> String {
+    let arr = match value.and_then(|v| v.as_array()) {
+        Some(a) => a,
+        None => return String::new(),
+    };
+    let mut parts: Vec<&str> = arr.iter().filter_map(|v| v.as_str()).collect();
+    parts.sort_unstable();
+    parts.join(",")
+}
+
+fn summarize_restrictions(value: Option<&serde_json::Value>) -> String {
+    let arr = match value.and_then(|v| v.as_array()) {
+        Some(a) if !a.is_empty() => a,
+        _ => return "None".to_string(),
+    };
+    arr.iter()
+        .map(|r| {
+            let reason = r.get("reasonCode").and_then(|v| v.as_str()).unwrap_or("Restricted");
+            let rtype = r.get("type").and_then(|v| v.as_str()).unwrap_or("");
+            let info = r.get("restrictionInfo");
+            let locs = info
+                .and_then(|i| i.get("locations"))
+                .map(|v| join_string_array(Some(v)))
+                .unwrap_or_default();
+            let zones = info
+                .and_then(|i| i.get("zones"))
+                .map(|v| join_string_array(Some(v)))
+                .unwrap_or_default();
+            let mut parts = vec![reason.to_string()];
+            if !rtype.is_empty() {
+                parts.push(format!("type: {}", rtype));
+            }
+            if !locs.is_empty() {
+                parts.push(format!("locations: {}", locs));
+            }
+            if !zones.is_empty() {
+                parts.push(format!("zones: {}", zones));
+            }
+            parts.join(", ")
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
 fn display_name(path: &str) -> &str {
-    path.rsplit('.').next().unwrap_or(path)
+    match path {
+        "@resourceType" => "ResourceType",
+        "@name" => "Name",
+        "@locations" => "Locations",
+        "@zones" => "Zones",
+        "@restrictions" => "Restrictions",
+        _ => path.rsplit('.').next().unwrap_or(path),
+    }
 }
 
 fn print_tsv(value: &serde_json::Value) -> anyhow::Result<()> {
