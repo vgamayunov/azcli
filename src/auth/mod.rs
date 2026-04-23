@@ -124,3 +124,77 @@ pub async fn get_subscription_id_az_cli() -> Result<String> {
     debug!("Using subscription from az CLI: {sub_id}");
     Ok(sub_id)
 }
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TenantInfo {
+    #[serde(rename = "tenantId")]
+    pub tenant_id: String,
+    #[serde(rename = "displayName")]
+    pub display_name: Option<String>,
+    #[serde(rename = "defaultDomain")]
+    pub default_domain: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TenantListResponse {
+    value: Vec<TenantInfo>,
+}
+
+pub async fn list_tenants(access_token: &str) -> Result<Vec<TenantInfo>> {
+    let client = reqwest::Client::new();
+    let resp = client
+        .get("https://management.azure.com/tenants?api-version=2022-12-01")
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .context("Failed to list tenants")?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        anyhow::bail!("List tenants failed ({status}): {body}");
+    }
+
+    let list: TenantListResponse = resp.json().await.context("Failed to parse tenant list")?;
+    Ok(list.value)
+}
+
+pub async fn acquire_tenant_token(
+    refresh_token: &str,
+    tenant_id: &str,
+) -> Result<OAuthTokenResponse> {
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(token_endpoint(tenant_id))
+        .form(&[
+            ("client_id", AZURE_CLI_CLIENT_ID),
+            ("grant_type", "refresh_token"),
+            ("refresh_token", refresh_token),
+            ("scope", MANAGEMENT_SCOPE),
+        ])
+        .send()
+        .await
+        .context("Tenant token exchange request failed")?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        anyhow::bail!("Tenant token exchange failed for {tenant_id} ({status}): {body}");
+    }
+
+    resp.json()
+        .await
+        .context("Failed to parse tenant token response")
+}
+
+pub fn decode_jwt_claims(token: &str) -> Result<serde_json::Value> {
+    use base64::Engine;
+    let parts: Vec<&str> = token.split('.').collect();
+    if parts.len() != 3 {
+        anyhow::bail!("invalid JWT: expected 3 segments, got {}", parts.len());
+    }
+    let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(parts[1])
+        .context("failed to base64-decode JWT payload")?;
+    serde_json::from_slice(&decoded).context("failed to parse JWT payload as JSON")
+}
