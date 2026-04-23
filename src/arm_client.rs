@@ -15,6 +15,7 @@ const DISK_API_VERSION: &str = "2023-04-02";
 const RESOURCE_SKU_API_VERSION: &str = "2021-07-01";
 const PIM_API_VERSION: &str = "2020-10-01";
 const ROLE_DEFINITION_API_VERSION: &str = "2022-04-01";
+const ROLE_ASSIGNMENT_API_VERSION: &str = "2022-04-01";
 
 #[derive(Clone)]
 pub struct ArmClient {
@@ -1360,6 +1361,80 @@ impl ArmClient {
             anyhow::bail!("Get role definition failed ({status}): {body}");
         }
         resp.json().await.context("Failed to parse role definition response")
+    }
+
+    pub async fn list_role_assignments(&self, scope: &str, filter: Option<&str>) -> Result<serde_json::Value> {
+        let mut url = format!(
+            "https://management.azure.com{}/providers/Microsoft.Authorization/roleAssignments?api-version={}",
+            scope, ROLE_ASSIGNMENT_API_VERSION
+        );
+        if let Some(f) = filter {
+            url.push_str("&$filter=");
+            url.push_str(&urlencode(f));
+        }
+        debug!("GET {url}");
+        let mut all_values: Vec<serde_json::Value> = Vec::new();
+        let mut next = Some(url);
+        while let Some(u) = next.take() {
+            let resp = self.client.get(&u).bearer_auth(&self.access_token).send().await
+                .context("Failed to list role assignments")?;
+            if !resp.status().is_success() {
+                let status = resp.status();
+                let body = resp.text().await.unwrap_or_default();
+                anyhow::bail!("List role assignments failed ({status}): {body}");
+            }
+            let mut page: serde_json::Value = resp.json().await.context("Failed to parse role assignments response")?;
+            if let Some(arr) = page.get_mut("value").and_then(|v| v.as_array_mut()) {
+                all_values.append(arr);
+            }
+            next = page.get("nextLink").and_then(|v| v.as_str()).map(|s| s.to_string());
+        }
+        Ok(serde_json::json!({ "value": all_values }))
+    }
+
+    pub async fn get_role_assignment_by_id(&self, full_id: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com{}?api-version={}",
+            full_id, ROLE_ASSIGNMENT_API_VERSION
+        );
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to get role assignment")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Get role assignment failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse role assignment response")
+    }
+
+    pub async fn list_role_definitions(&self, scope: &str, filter: Option<&str>) -> Result<serde_json::Value> {
+        let mut url = format!(
+            "https://management.azure.com{}/providers/Microsoft.Authorization/roleDefinitions?api-version={}",
+            scope, ROLE_DEFINITION_API_VERSION
+        );
+        if let Some(f) = filter {
+            url.push_str("&$filter=");
+            url.push_str(&urlencode(f));
+        }
+        debug!("GET {url}");
+        let mut all_values: Vec<serde_json::Value> = Vec::new();
+        let mut next = Some(url);
+        while let Some(u) = next.take() {
+            let resp = self.client.get(&u).bearer_auth(&self.access_token).send().await
+                .context("Failed to list role definitions")?;
+            if !resp.status().is_success() {
+                let status = resp.status();
+                let body = resp.text().await.unwrap_or_default();
+                anyhow::bail!("List role definitions failed ({status}): {body}");
+            }
+            let mut page: serde_json::Value = resp.json().await.context("Failed to parse role definitions response")?;
+            if let Some(arr) = page.get_mut("value").and_then(|v| v.as_array_mut()) {
+                all_values.append(arr);
+            }
+            next = page.get("nextLink").and_then(|v| v.as_str()).map(|s| s.to_string());
+        }
+        Ok(serde_json::json!({ "value": all_values }))
     }
 }
 

@@ -190,6 +190,14 @@ fn pick_table_columns(sample: &serde_json::Value) -> Vec<String> {
     }
 
     if obj.contains_key("roleName") && obj.contains_key("roleDefinitionId") && obj.contains_key("scope") {
+        if obj.contains_key("principalType") {
+            return vec![
+                "roleName".to_string(),
+                "principalType".to_string(),
+                "principalId".to_string(),
+                "@scopeShort".to_string(),
+            ];
+        }
         let mut cols = vec!["roleName".to_string()];
         if obj.contains_key("state") {
             cols.push("state".to_string());
@@ -203,6 +211,15 @@ fn pick_table_columns(sample: &serde_json::Value) -> Vec<String> {
             cols.push("endDateTime".to_string());
         }
         return cols;
+    }
+
+    if obj.contains_key("roleName") && obj.contains_key("type") && obj.contains_key("assignableScopes") {
+        return vec![
+            "roleName".to_string(),
+            "type".to_string(),
+            "name".to_string(),
+            "description".to_string(),
+        ];
     }
 
     let preferred = [
@@ -327,6 +344,11 @@ fn display_name(path: &str) -> &str {
         "assignmentType" => "Type",
         "startDateTime" => "Start",
         "endDateTime" => "End",
+        "principalType" => "PrincipalType",
+        "principalId" => "PrincipalId",
+        "type" => "Type",
+        "name" => "Name",
+        "description" => "Description",
         _ => path.rsplit('.').next().unwrap_or(path),
     }
 }
@@ -394,12 +416,12 @@ fn short_scope(scope: &str) -> String {
     let mut leaf: Option<&str> = None;
     let mut i = 0;
     while i < parts.len() {
-        match parts[i] {
+        match parts[i].to_ascii_lowercase().as_str() {
             "subscriptions" if i + 1 < parts.len() => {
                 sub = parts[i + 1];
                 i += 2;
             }
-            "resourceGroups" if i + 1 < parts.len() => {
+            "resourcegroups" if i + 1 < parts.len() => {
                 rg = Some(parts[i + 1]);
                 i += 2;
             }

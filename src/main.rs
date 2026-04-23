@@ -125,9 +125,61 @@ enum AccountCommand {
 
 #[derive(Subcommand)]
 enum RoleCommand {
+    Assignment {
+        #[command(subcommand)]
+        command: RoleAssignmentCommand,
+    },
+    Definition {
+        #[command(subcommand)]
+        command: RoleDefinitionCommand,
+    },
     Pim {
         #[command(subcommand)]
         command: RolePimCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum RoleAssignmentCommand {
+    List {
+        #[arg(long)]
+        assignee: Option<String>,
+        #[arg(long)]
+        role: Option<String>,
+        #[arg(long)]
+        scope: Option<String>,
+        #[arg(short = 'g', long)]
+        resource_group: Option<String>,
+        #[arg(long)]
+        include_groups: bool,
+        #[arg(long)]
+        all: bool,
+    },
+    Show {
+        #[arg(long)]
+        ids: Option<String>,
+        #[arg(short = 'n', long)]
+        name: Option<String>,
+        #[arg(long)]
+        scope: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum RoleDefinitionCommand {
+    List {
+        #[arg(short = 'n', long)]
+        name: Option<String>,
+        #[arg(long)]
+        scope: Option<String>,
+        #[arg(long)]
+        custom_role_only: bool,
+    },
+    Show {
+        #[arg(short = 'n', long)]
+        name: String,
+        #[arg(long)]
+        scope: Option<String>,
     },
 }
 
@@ -1869,6 +1921,56 @@ async fn handle_role(
     let client = arm_client::ArmClient::new(access_token, subscription_id);
 
     match cmd {
+        RoleCommand::Assignment { command } => match command {
+            RoleAssignmentCommand::List { assignee, role, scope, resource_group, include_groups, all } => {
+                let value = commands::role::assignment::list::execute(
+                    &client,
+                    assignee.as_deref(),
+                    role.as_deref(),
+                    scope.as_deref(),
+                    resource_group.as_deref(),
+                    subscription.as_deref(),
+                    include_groups,
+                    all,
+                )
+                .await?;
+                output::print_output(&value, output_format)
+            }
+            RoleAssignmentCommand::Show { ids, name, scope } => {
+                let value = commands::role::assignment::show::execute(
+                    &client,
+                    ids.as_deref(),
+                    name.as_deref(),
+                    scope.as_deref(),
+                    subscription.as_deref(),
+                )
+                .await?;
+                output::print_output(&value, output_format)
+            }
+        },
+        RoleCommand::Definition { command } => match command {
+            RoleDefinitionCommand::List { name, scope, custom_role_only } => {
+                let value = commands::role::definition::list::execute(
+                    &client,
+                    name.as_deref(),
+                    scope.as_deref(),
+                    subscription.as_deref(),
+                    custom_role_only,
+                )
+                .await?;
+                output::print_output(&value, output_format)
+            }
+            RoleDefinitionCommand::Show { name, scope } => {
+                let value = commands::role::definition::show::execute(
+                    &client,
+                    &name,
+                    scope.as_deref(),
+                    subscription.as_deref(),
+                )
+                .await?;
+                output::print_output(&value, output_format)
+            }
+        },
         RoleCommand::Pim { command } => match command {
             RolePimCommand::List { scope } => {
                 let value = commands::role::pim::list::execute(

@@ -31,6 +31,8 @@ azcli group list -o table
 | [`vmss`](docs/virtual-machine-scale-sets.md) | Partial | 11 | Core commands. Subgroups not yet implemented |
 | [`deployment`](docs/deployments.md) | Full | 44 | All four ARM scopes (group, sub, mg, tenant) + operations |
 | [`network bastion`](docs/bastion.md) | Full | 9 | SSH, RDP, tunnel with custom WebSocket implementation |
+| [`role assignment`](docs/role.md#role-assignment) | Read | 2 | List, show |
+| [`role definition`](docs/role.md#role-definition) | Read | 2 | List, show |
 | [`role pim`](docs/pim.md) | Full | 4 | List, status, activate, deactivate PIM role assignments |
 | [`rest`](docs/rest.md) | Full | 1 | Arbitrary ARM API requests |
 
