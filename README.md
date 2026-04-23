@@ -34,7 +34,7 @@ azcli group list -o table
 | [`network bastion`](docs/bastion.md) | Full | 9 | SSH, RDP, tunnel with custom WebSocket implementation |
 | [`role assignment`](docs/role.md#role-assignment) | Read | 2 | List, show |
 | [`role definition`](docs/role.md#role-definition) | Read | 2 | List, show |
-| [`role pim`](docs/pim.md) | Full | 4 | List, status, activate, deactivate PIM role assignments |
+| [`role pim`](docs/pim.md) | **NEW** | 4 | List, status, activate, deactivate PIM role assignments |
 | [`rest`](docs/rest.md) | Full | 1 | Arbitrary ARM API requests |
 
 ## Output Formats
