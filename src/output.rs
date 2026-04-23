@@ -114,17 +114,7 @@ fn print_yaml(value: &serde_json::Value) -> anyhow::Result<()> {
 }
 
 fn print_table(value: &serde_json::Value) -> anyhow::Result<()> {
-    let items = match value {
-        serde_json::Value::Array(arr) => arr.clone(),
-        serde_json::Value::Object(map) => {
-            if let Some(arr) = map.get("value").and_then(|v| v.as_array()) {
-                arr.clone()
-            } else {
-                vec![value.clone()]
-            }
-        }
-        _ => vec![value.clone()],
-    };
+    let items = unwrap_items(value);
 
     if items.is_empty() {
         return Ok(());
@@ -186,7 +176,6 @@ fn pick_table_columns(sample: &serde_json::Value) -> Vec<String> {
         None => return vec![],
     };
 
-    // Compute SKU shape (vm/disk/vmss list-skus): match az's column set exactly.
     if obj.contains_key("resourceType")
         && obj.contains_key("capabilities")
         && obj.contains_key("locationInfo")
@@ -198,6 +187,22 @@ fn pick_table_columns(sample: &serde_json::Value) -> Vec<String> {
             "@zones".to_string(),
             "@restrictions".to_string(),
         ];
+    }
+
+    if obj.contains_key("roleName") && obj.contains_key("roleDefinitionId") && obj.contains_key("scope") {
+        let mut cols = vec!["roleName".to_string()];
+        if obj.contains_key("state") {
+            cols.push("state".to_string());
+        }
+        if obj.contains_key("assignmentType") {
+            cols.push("assignmentType".to_string());
+        }
+        cols.push("@scopeShort".to_string());
+        cols.push("startDateTime".to_string());
+        if obj.contains_key("endDateTime") {
+            cols.push("endDateTime".to_string());
+        }
+        return cols;
     }
 
     let preferred = [
@@ -253,6 +258,7 @@ fn extract_field(item: &serde_json::Value, path: &str) -> String {
             .map(|li| join_string_array(li.get("zones")))
             .unwrap_or_default(),
         "@restrictions" => summarize_restrictions(item.get("restrictions")),
+        "@scopeShort" => short_scope(item.get("scope").and_then(|v| v.as_str()).unwrap_or("")),
         _ => match resolve_path(item, path) {
             Some(serde_json::Value::String(s)) => s.clone(),
             Some(serde_json::Value::Null) => String::new(),
@@ -315,22 +321,18 @@ fn display_name(path: &str) -> &str {
         "@locations" => "Locations",
         "@zones" => "Zones",
         "@restrictions" => "Restrictions",
+        "@scopeShort" => "Scope",
+        "roleName" => "Role",
+        "state" => "State",
+        "assignmentType" => "Type",
+        "startDateTime" => "Start",
+        "endDateTime" => "End",
         _ => path.rsplit('.').next().unwrap_or(path),
     }
 }
 
 fn print_tsv(value: &serde_json::Value) -> anyhow::Result<()> {
-    let items = match value {
-        serde_json::Value::Array(arr) => arr.clone(),
-        serde_json::Value::Object(map) => {
-            if let Some(arr) = map.get("value").and_then(|v| v.as_array()) {
-                arr.clone()
-            } else {
-                vec![value.clone()]
-            }
-        }
-        _ => vec![value.clone()],
-    };
+    let items = unwrap_items(value);
 
     if items.is_empty() {
         return Ok(());
@@ -347,4 +349,71 @@ fn print_tsv(value: &serde_json::Value) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn unwrap_items(value: &serde_json::Value) -> Vec<serde_json::Value> {
+    match value {
+        serde_json::Value::Array(arr) => arr.clone(),
+        serde_json::Value::Object(map) => {
+            if let Some(arr) = map.get("value").and_then(|v| v.as_array()) {
+                return arr.clone();
+            }
+            let has_eligible = map.get("eligible").and_then(|v| v.as_array()).is_some();
+            let has_active = map.get("active").and_then(|v| v.as_array()).is_some();
+            if has_eligible || has_active {
+                let mut out = Vec::new();
+                if let Some(arr) = map.get("eligible").and_then(|v| v.as_array()) {
+                    for item in arr {
+                        out.push(tag_state(item.clone(), "Eligible"));
+                    }
+                }
+                if let Some(arr) = map.get("active").and_then(|v| v.as_array()) {
+                    for item in arr {
+                        out.push(tag_state(item.clone(), "Active"));
+                    }
+                }
+                return out;
+            }
+            vec![value.clone()]
+        }
+        _ => vec![value.clone()],
+    }
+}
+
+fn tag_state(mut item: serde_json::Value, state: &str) -> serde_json::Value {
+    if let Some(obj) = item.as_object_mut() {
+        obj.insert("state".to_string(), serde_json::Value::String(state.to_string()));
+    }
+    item
+}
+
+fn short_scope(scope: &str) -> String {
+    let parts: Vec<&str> = scope.split('/').filter(|s| !s.is_empty()).collect();
+    let mut sub = "";
+    let mut rg: Option<&str> = None;
+    let mut leaf: Option<&str> = None;
+    let mut i = 0;
+    while i < parts.len() {
+        match parts[i] {
+            "subscriptions" if i + 1 < parts.len() => {
+                sub = parts[i + 1];
+                i += 2;
+            }
+            "resourceGroups" if i + 1 < parts.len() => {
+                rg = Some(parts[i + 1]);
+                i += 2;
+            }
+            "providers" if i + 3 < parts.len() => {
+                leaf = Some(parts[parts.len() - 1]);
+                i = parts.len();
+            }
+            _ => i += 1,
+        }
+    }
+    let sub_short = sub.split('-').next().unwrap_or(sub);
+    match (rg, leaf) {
+        (None, _) => format!("sub:{}", sub_short),
+        (Some(r), None) => format!("sub:{}/{}", sub_short, r),
+        (Some(r), Some(l)) => format!("sub:{}/{}/.../{}", sub_short, r, l),
+    }
 }
