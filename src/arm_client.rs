@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use base64::Engine;
 use reqwest::Client;
 use tracing::debug;
 
@@ -12,6 +13,8 @@ const SKU_API_VERSION: &str = "2021-07-01";
 const DEVTESTLAB_API_VERSION: &str = "2018-09-15";
 const DISK_API_VERSION: &str = "2023-04-02";
 const RESOURCE_SKU_API_VERSION: &str = "2021-07-01";
+const PIM_API_VERSION: &str = "2020-10-01";
+const ROLE_DEFINITION_API_VERSION: &str = "2022-04-01";
 
 #[derive(Clone)]
 pub struct ArmClient {
@@ -1268,4 +1271,107 @@ impl ArmClient {
         let body = resp.text().await.unwrap_or_default();
         anyhow::bail!("Delete run command failed ({status}): {body}");
     }
+
+    /// Extract the current user's Azure AD object ID (oid) from the access token JWT.
+    /// Falls back to the `sub` claim if `oid` is absent.
+    pub fn principal_id(&self) -> Result<String> {
+        let parts: Vec<&str> = self.access_token.split('.').collect();
+        if parts.len() != 3 {
+            anyhow::bail!("invalid JWT: expected 3 segments, got {}", parts.len());
+        }
+        let payload = parts[1];
+        let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(payload)
+            .context("failed to base64-decode JWT payload")?;
+        let claims: serde_json::Value =
+            serde_json::from_slice(&decoded).context("failed to parse JWT payload as JSON")?;
+        if let Some(oid) = claims.get("oid").and_then(|v| v.as_str()) {
+            return Ok(oid.to_string());
+        }
+        if let Some(sub) = claims.get("sub").and_then(|v| v.as_str()) {
+            return Ok(sub.to_string());
+        }
+        anyhow::bail!("access token has neither 'oid' nor 'sub' claim");
+    }
+
+    pub async fn list_eligible_role_schedules(&self, scope: &str, principal_id: &str) -> Result<serde_json::Value> {
+        let filter = format!("principalId eq '{}'", principal_id);
+        let encoded = urlencode(&filter);
+        let url = format!(
+            "https://management.azure.com{}/providers/Microsoft.Authorization/roleEligibilityScheduleInstances?api-version={}&$filter={}",
+            scope, PIM_API_VERSION, encoded
+        );
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to list eligible roles")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("List eligible roles failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse eligible roles response")
+    }
+
+    pub async fn list_active_role_schedules(&self, scope: &str, principal_id: &str) -> Result<serde_json::Value> {
+        let filter = format!("principalId eq '{}'", principal_id);
+        let encoded = urlencode(&filter);
+        let url = format!(
+            "https://management.azure.com{}/providers/Microsoft.Authorization/roleAssignmentScheduleInstances?api-version={}&$filter={}",
+            scope, PIM_API_VERSION, encoded
+        );
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to list active assignments")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("List active assignments failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse active assignments response")
+    }
+
+    pub async fn create_role_assignment_schedule_request(&self, scope: &str, request_name: &str, body: serde_json::Value) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com{}/providers/Microsoft.Authorization/roleAssignmentScheduleRequests/{}?api-version={}",
+            scope, request_name, PIM_API_VERSION
+        );
+        debug!("PUT {url}");
+        let resp = self.client.put(&url).bearer_auth(&self.access_token).json(&body).send().await
+            .context("Failed to create role assignment schedule request")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Role assignment schedule request failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse schedule request response")
+    }
+
+    pub async fn get_role_definition_by_id(&self, role_definition_id: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com{}?api-version={}",
+            role_definition_id, ROLE_DEFINITION_API_VERSION
+        );
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to get role definition")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Get role definition failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse role definition response")
+    }
+}
+
+fn urlencode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char);
+            }
+            _ => out.push_str(&format!("%{:02X}", b)),
+        }
+    }
+    out
 }

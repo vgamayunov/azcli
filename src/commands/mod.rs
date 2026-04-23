@@ -6,6 +6,7 @@ pub mod group;
 pub mod list;
 pub mod rdp;
 pub mod rest;
+pub mod role;
 pub mod show;
 pub mod ssh;
 pub mod tunnel;
