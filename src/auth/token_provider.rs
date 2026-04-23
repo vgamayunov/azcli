@@ -22,6 +22,24 @@ impl TokenProvider {
         })
     }
 
+    pub fn cache_default_subscription(&self) -> Option<String> {
+        self.subscription_override
+            .clone()
+            .or_else(|| self.cache.default_subscription.clone())
+    }
+
+    pub fn cache(&self) -> &TokenCache {
+        &self.cache
+    }
+
+    pub fn cache_mut(&mut self) -> &mut TokenCache {
+        &mut self.cache
+    }
+
+    pub fn save_cache(&self) -> Result<()> {
+        self.cache.save()
+    }
+
     pub async fn get_access_token(&mut self) -> Result<String> {
         let sub_override = self.subscription_override.clone();
 

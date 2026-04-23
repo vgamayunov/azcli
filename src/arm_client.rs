@@ -1436,6 +1436,30 @@ impl ArmClient {
         }
         Ok(serde_json::json!({ "value": all_values }))
     }
+
+    pub async fn list_locations(&self, subscription_id: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/locations?api-version=2022-12-01",
+            subscription_id
+        );
+        debug!("GET {url}");
+
+        let resp = self
+            .client
+            .get(&url)
+            .bearer_auth(&self.access_token)
+            .send()
+            .await
+            .context("Failed to list locations")?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("List locations failed ({status}): {body}");
+        }
+
+        resp.json().await.context("Failed to parse locations response")
+    }
 }
 
 fn urlencode(s: &str) -> String {

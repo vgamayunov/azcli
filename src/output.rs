@@ -222,6 +222,27 @@ fn pick_table_columns(sample: &serde_json::Value) -> Vec<String> {
         ];
     }
 
+    if obj.contains_key("isDefault") && obj.contains_key("tenantId") && obj.contains_key("id") {
+        let mut cols = vec![
+            "name".to_string(),
+            "id".to_string(),
+            "tenantId".to_string(),
+            "isDefault".to_string(),
+        ];
+        if obj.contains_key("state") {
+            cols.insert(3, "state".to_string());
+        }
+        return cols;
+    }
+
+    if obj.contains_key("regionalDisplayName") && obj.contains_key("displayName") {
+        return vec![
+            "name".to_string(),
+            "displayName".to_string(),
+            "regionalDisplayName".to_string(),
+        ];
+    }
+
     let preferred = [
         "name",
         "location",
@@ -349,6 +370,11 @@ fn display_name(path: &str) -> &str {
         "type" => "Type",
         "name" => "Name",
         "description" => "Description",
+        "tenantId" => "TenantId",
+        "isDefault" => "IsDefault",
+        "displayName" => "DisplayName",
+        "regionalDisplayName" => "Region",
+        "id" => "Id",
         _ => path.rsplit('.').next().unwrap_or(path),
     }
 }

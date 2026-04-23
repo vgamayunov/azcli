@@ -1,4 +1,5 @@
 pub mod create;
+pub mod account;
 pub mod delete;
 pub mod deployment;
 pub mod disk;

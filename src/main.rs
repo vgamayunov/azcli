@@ -120,7 +120,21 @@ enum CliCommand {
 
 #[derive(Subcommand)]
 enum AccountCommand {
-    Show,
+    Show {
+        #[arg(short = 'n', long)]
+        name: Option<String>,
+    },
+    List,
+    Set {
+        #[arg(short = 'n', long)]
+        name: String,
+    },
+    ListLocations {
+        #[arg(long)]
+        subscription_id: Option<String>,
+    },
+    GetAccessToken,
+    Clear,
 }
 
 #[derive(Subcommand)]
@@ -1565,9 +1579,41 @@ async fn main() -> anyhow::Result<()> {
         }
 
         CliCommand::Account { command } => match command {
-            AccountCommand::Show => {
+            AccountCommand::Show { name } => {
                 let provider = auth::TokenProvider::load(subscription)?;
-                provider.show_account()
+                let value = commands::account::show::execute(&provider, name.as_deref())?;
+                output::print_output(&value, output_format)
+            }
+            AccountCommand::List => {
+                let mut provider = auth::TokenProvider::load(subscription)?;
+                let value = commands::account::list::execute(&mut provider).await?;
+                output::print_output(&value, output_format)
+            }
+            AccountCommand::Set { name } => {
+                let mut provider = auth::TokenProvider::load(subscription)?;
+                let value = commands::account::set::execute(&mut provider, &name).await?;
+                output::print_output(&value, output_format)
+            }
+            AccountCommand::ListLocations { subscription_id } => {
+                let mut provider = auth::TokenProvider::load(subscription.clone())?;
+                let token = provider.get_access_token().await?;
+                let sub = subscription_id
+                    .or(subscription)
+                    .or_else(|| provider.cache_default_subscription())
+                    .ok_or_else(|| anyhow::anyhow!("no subscription specified and no default in cache"))?;
+                let client = arm_client::ArmClient::new(token, sub.clone());
+                let value = commands::account::list_locations::execute(&client, Some(&sub)).await?;
+                output::print_output(&value, output_format)
+            }
+            AccountCommand::GetAccessToken => {
+                let mut provider = auth::TokenProvider::load(subscription)?;
+                let value = commands::account::get_access_token::execute(&mut provider).await?;
+                output::print_output(&value, output_format)
+            }
+            AccountCommand::Clear => {
+                let mut provider = auth::TokenProvider::load(subscription)?;
+                let value = commands::account::clear::execute(&mut provider)?;
+                output::print_output(&value, output_format)
             }
         },
 

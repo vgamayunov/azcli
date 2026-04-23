@@ -22,6 +22,7 @@ azcli group list -o table
 | Command Group | Status | Commands | Details |
 |---------------|--------|----------|---------|
 | [`login` / `logout` / `account`](docs/authentication.md) | Full | 3 | Native OAuth2 (browser, device code, service principal, managed identity) |
+| [`account`](docs/account.md) | Full | 6 | show, list, set, list-locations, get-access-token, clear |
 | [`group`](docs/resource-groups.md) | Full | 2 | List and show resource groups |
 | [`vm`](docs/virtual-machines.md) | Full (top-level) | 29 | All top-level commands. Subgroups: `vm disk`, `vm nic`, `vm run-command` implemented; extension, identity not yet |
 | [`vm disk`](docs/managed-disks.md) | Full | 2 | Attach and detach data disks |
