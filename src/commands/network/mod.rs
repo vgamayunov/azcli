@@ -1,3 +1,4 @@
+pub mod dns;
 pub mod lb;
 pub mod nic;
 pub mod nsg;

@@ -1578,6 +1578,10 @@ enum NetworkCommand {
         #[command(subcommand)]
         command: RouteTableCommand,
     },
+    Dns {
+        #[command(subcommand)]
+        command: DnsCommand,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1954,6 +1958,47 @@ enum RouteTableRouteCommand {
     },
 }
 
+#[derive(Subcommand)]
+enum DnsCommand {
+    ListZone {
+        #[arg(short = 'g', long)]
+        resource_group: Option<String>,
+    },
+    ShowZone {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+    RecordSet {
+        #[command(subcommand)]
+        command: DnsRecordSetCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum DnsRecordSetCommand {
+    List {
+        #[arg(short, long)]
+        zone_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+        #[arg(short, long, default_value = "*")]
+        record_type: String,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        zone_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+        #[arg(short, long)]
+        record_type: String,
+    },
+}
+
+
 
 
 #[derive(Subcommand)]
@@ -2295,6 +2340,9 @@ async fn main() -> anyhow::Result<()> {
             }
             NetworkCommand::RouteTable { command } => {
                 handle_network_route_table(command, output_format, subscription, query.as_deref()).await
+            }
+            NetworkCommand::Dns { command } => {
+                handle_network_dns(command, output_format, subscription, query.as_deref()).await
             }
         }
 
@@ -3665,5 +3713,41 @@ async fn handle_network_route_table(
         }
     }
 }
+
+async fn handle_network_dns(
+    cmd: DnsCommand,
+    output_format: OutputFormat,
+    subscription: Option<String>,
+    query: Option<&str>,
+) -> anyhow::Result<()> {
+    let mut provider = auth::TokenProvider::load(subscription)?;
+    let access_token = provider.get_access_token().await?;
+    let subscription_id = provider.get_subscription_id_or_fallback().await?;
+    let client = arm_client::ArmClient::new(access_token, subscription_id);
+
+    match cmd {
+        DnsCommand::ListZone { resource_group } => {
+            let value = commands::network::dns::list_zone::execute(&client, resource_group.as_deref()).await?;
+            output::print_output(&value, output_format, query)
+        }
+        DnsCommand::ShowZone { name, resource_group } => {
+            let value = commands::network::dns::show_zone::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format, query)
+        }
+        DnsCommand::RecordSet { command } => {
+            match command {
+                DnsRecordSetCommand::List { zone_name, resource_group, record_type } => {
+                    let value = commands::network::dns::record_set_list::execute(&client, &resource_group, &zone_name, &record_type).await?;
+                    output::print_output(&value, output_format, query)
+                }
+                DnsRecordSetCommand::Show { name, zone_name, resource_group, record_type } => {
+                    let value = commands::network::dns::record_set_show::execute(&client, &resource_group, &zone_name, &name, &record_type).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+    }
+}
+
 
 

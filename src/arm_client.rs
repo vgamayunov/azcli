@@ -1942,7 +1942,61 @@ impl ArmClient {
         self.arm_get(url, "get route").await
     }
 
+    pub async fn list_dns_zones(&self, resource_group: Option<&str>) -> Result<serde_json::Value> {
+        let url = match resource_group {
+            Some(rg) => format!(
+                "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/dnsZones?api-version=2018-05-01",
+                self.subscription_id, rg
+            ),
+            None => format!(
+                "https://management.azure.com/subscriptions/{}/providers/Microsoft.Network/dnsZones?api-version=2018-05-01",
+                self.subscription_id
+            ),
+        };
+        self.arm_get_paginated(url, "list DNS zones").await
+    }
+
+    pub async fn show_dns_zone(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/dnsZones/{}?api-version=2018-05-01",
+            self.subscription_id, resource_group, name
+        );
+        self.arm_get(url, "get DNS zone").await
+    }
+
+    pub async fn list_dns_record_sets(&self, resource_group: &str, zone_name: &str, record_type: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/dnsZones/{}/recordsets?api-version=2018-05-01",
+            self.subscription_id, resource_group, zone_name
+        );
+        let mut result = self.arm_get_paginated(url, "list DNS record sets").await?;
+        
+        // Filter by record type if specified
+        if record_type != "*" {
+            if let Some(value) = result.get_mut("value") {
+                if let Some(arr) = value.as_array_mut() {
+                    arr.retain(|item| {
+                        item.get("type")
+                            .and_then(|t| t.as_str())
+                            .map(|t| t.ends_with(&format!("/{}", record_type)))
+                            .unwrap_or(false)
+                    });
+                }
+            }
+        }
+        Ok(result)
+    }
+
+    pub async fn show_dns_record_set(&self, resource_group: &str, zone_name: &str, name: &str, record_type: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/dnsZones/{}/recordsets/{}/{}?api-version=2018-05-01",
+            self.subscription_id, resource_group, zone_name, name, record_type
+        );
+        self.arm_get(url, "get DNS record set").await
+    }
+
 }
+
 
 
 fn urlencode(s: &str) -> String {
