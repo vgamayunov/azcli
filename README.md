@@ -34,7 +34,7 @@ azcli group list -o table
 | [`vmss`](docs/virtual-machine-scale-sets.md) | Partial | 11 | Core commands. Subgroups not yet implemented |
 | [`deployment`](docs/deployments.md) | Full | 44 | All four ARM scopes (group, sub, mg, tenant) + operations |
 | [`network bastion`](docs/bastion.md) | Full | 9 | SSH, RDP, tunnel with custom WebSocket implementation |
-| [`network`](docs/network.md) | Read | 63+ | **Tier 1 (7 subgroups)**: vnet, nsg, public-ip, nic, private-endpoint, lb, route-table. **Tier 2 (5 subgroups)**: dns, watcher, application-gateway, nat, private-dns. Includes 33 nested sub-subcommands |
+| [`network`](docs/network.md) | Read | 75+ | **Tier 1 (7 subgroups)**: vnet, nsg, public-ip, nic, private-endpoint, lb, route-table. **Tier 2 (5 subgroups)**: dns, watcher, application-gateway, nat, private-dns. **Tier 3 (4 subgroups)**: vpn-gateway, express-route, traffic-manager, firewall. Includes 33 nested sub-subcommands |
 | [`role assignment`](docs/role.md#role-assignment) | Read | 2 | List, show |
 | [`role definition`](docs/role.md#role-definition) | Read | 2 | List, show |
 | [`role pim`](docs/pim.md) | **NEW** | 4 | List, status, activate, deactivate PIM role assignments |
