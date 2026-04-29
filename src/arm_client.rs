@@ -45,25 +45,7 @@ impl ArmClient {
             "https://management.azure.com/subscriptions/{}/resourcegroups?api-version={}",
             self.subscription_id, RESOURCE_GROUP_API_VERSION
         );
-        debug!("GET {url}");
-
-        let resp = self
-            .client
-            .get(&url)
-            .bearer_auth(&self.access_token)
-            .send()
-            .await
-            .context("Failed to list resource groups")?;
-
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("List resource groups failed ({status}): {body}");
-        }
-
-        let list: AzureListResponse<ResourceGroup> =
-            resp.json().await.context("Failed to parse resource group list")?;
-        Ok(list.value)
+        self.arm_list_paginated(url, "list resource groups").await
     }
 
     pub async fn show_resource_group(&self, name: &str) -> Result<ResourceGroup> {
@@ -101,25 +83,7 @@ impl ArmClient {
                 self.subscription_id, COMPUTE_API_VERSION
             ),
         };
-        debug!("GET {url}");
-
-        let resp = self
-            .client
-            .get(&url)
-            .bearer_auth(&self.access_token)
-            .send()
-            .await
-            .context("Failed to list virtual machines")?;
-
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("List virtual machines failed ({status}): {body}");
-        }
-
-        let list: AzureListResponse<VirtualMachine> =
-            resp.json().await.context("Failed to parse VM list")?;
-        Ok(list.value)
+        self.arm_list_paginated(url, "list virtual machines").await
     }
 
     pub async fn show_vm(&self, resource_group: &str, name: &str) -> Result<VirtualMachine> {
@@ -288,15 +252,7 @@ impl ArmClient {
             "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/locations/{}/vmSizes?api-version={}",
             self.subscription_id, location, COMPUTE_API_VERSION
         );
-        debug!("GET {url}");
-        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
-            .context("Failed to list VM sizes")?;
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("List VM sizes failed ({status}): {body}");
-        }
-        resp.json().await.context("Failed to parse VM sizes")
+        self.arm_get_paginated(url, "list VM sizes").await
     }
 
     pub async fn vm_list_skus(&self) -> Result<serde_json::Value> {
@@ -304,15 +260,7 @@ impl ArmClient {
             "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/skus?api-version={}",
             self.subscription_id, SKU_API_VERSION
         );
-        debug!("GET {url}");
-        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
-            .context("Failed to list compute SKUs")?;
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("List compute SKUs failed ({status}): {body}");
-        }
-        resp.json().await.context("Failed to parse compute SKUs")
+        self.arm_get_paginated(url, "list compute SKUs").await
     }
 
     pub async fn vm_list_usage(&self, location: &str) -> Result<serde_json::Value> {
@@ -320,15 +268,7 @@ impl ArmClient {
             "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/locations/{}/usages?api-version={}",
             self.subscription_id, location, COMPUTE_API_VERSION
         );
-        debug!("GET {url}");
-        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
-            .context("Failed to list VM usage")?;
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("List VM usage failed ({status}): {body}");
-        }
-        resp.json().await.context("Failed to parse VM usage")
+        self.arm_get_paginated(url, "list VM usage").await
     }
 
     pub async fn vm_list_resize_options(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
@@ -336,15 +276,7 @@ impl ArmClient {
             "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/virtualMachines/{}/vmSizes?api-version={}",
             self.subscription_id, resource_group, name, COMPUTE_API_VERSION
         );
-        debug!("GET {url}");
-        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
-            .context("Failed to list VM resize options")?;
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("List VM resize options failed ({status}): {body}");
-        }
-        resp.json().await.context("Failed to parse VM resize options")
+        self.arm_get_paginated(url, "list VM resize options").await
     }
 
     pub async fn vm_create(&self, resource_group: &str, name: &str, body: serde_json::Value) -> Result<serde_json::Value> {
@@ -554,19 +486,7 @@ impl ArmClient {
                 self.subscription_id, COMPUTE_API_VERSION
             ),
         };
-        debug!("GET {url}");
-
-        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
-            .context("Failed to list VMSS")?;
-
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("List VMSS failed ({status}): {body}");
-        }
-
-        let list: AzureListResponse<Vmss> = resp.json().await.context("Failed to parse VMSS list")?;
-        Ok(list.value)
+        self.arm_list_paginated(url, "list VMSS").await
     }
 
     pub async fn show_vmss(&self, resource_group: &str, name: &str) -> Result<Vmss> {
@@ -596,19 +516,7 @@ impl ArmClient {
         if let Some(exp) = expand {
             url.push_str(&format!("&$expand={exp}"));
         }
-        debug!("GET {url}");
-
-        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
-            .context("Failed to list VMSS instances")?;
-
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("List VMSS instances failed ({status}): {body}");
-        }
-
-        let list: AzureListResponse<VmssInstance> = resp.json().await.context("Failed to parse VMSS instances")?;
-        Ok(list.value)
+        self.arm_list_paginated(url, "list VMSS instances").await
     }
 
     pub async fn list_vmss_skus(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
@@ -616,18 +524,7 @@ impl ArmClient {
             "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/virtualMachineScaleSets/{}/skus?api-version={}",
             self.subscription_id, resource_group, name, COMPUTE_API_VERSION
         );
-        debug!("GET {url}");
-
-        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
-            .context("Failed to list VMSS SKUs")?;
-
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("List VMSS SKUs failed ({status}): {body}");
-        }
-
-        resp.json().await.context("Failed to parse VMSS SKUs")
+        self.arm_get_paginated(url, "list VMSS SKUs").await
     }
 
     pub async fn list_vmss_instance_public_ips(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
@@ -635,18 +532,7 @@ impl ArmClient {
             "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/virtualMachineScaleSets/{}/publicipaddresses?api-version=2018-10-01",
             self.subscription_id, resource_group, name
         );
-        debug!("GET {url}");
-
-        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
-            .context("Failed to list VMSS instance public IPs")?;
-
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("List VMSS instance public IPs failed ({status}): {body}");
-        }
-
-        resp.json().await.context("Failed to parse VMSS public IPs")
+        self.arm_get_paginated(url, "list VMSS instance public IPs").await
     }
 
     pub async fn vmss_scale(&self, resource_group: &str, name: &str, capacity: i64) -> Result<()> {
@@ -752,15 +638,7 @@ impl ArmClient {
 
     pub async fn deployment_list(&self, base_url: &str) -> Result<serde_json::Value> {
         let url = format!("{base_url}?api-version={DEPLOYMENT_API_VERSION}");
-        debug!("GET {url}");
-        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
-            .context("Failed to list deployments")?;
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("List deployments failed ({status}): {body}");
-        }
-        resp.json().await.context("Failed to parse deployments list")
+        self.arm_get_paginated(url, "list deployments").await
     }
 
     pub async fn deployment_show(&self, base_url: &str, name: &str) -> Result<serde_json::Value> {
@@ -881,15 +759,7 @@ impl ArmClient {
 
     pub async fn deployment_operations_list(&self, base_url: &str, deployment_name: &str) -> Result<serde_json::Value> {
         let url = format!("{base_url}/{deployment_name}/operations?api-version={DEPLOYMENT_API_VERSION}");
-        debug!("GET {url}");
-        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
-            .context("Failed to list deployment operations")?;
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("List deployment operations failed ({status}): {body}");
-        }
-        resp.json().await.context("Failed to parse deployment operations")
+        self.arm_get_paginated(url, "list deployment operations").await
     }
 
     pub async fn deployment_operations_show(&self, base_url: &str, deployment_name: &str, operation_id: &str) -> Result<serde_json::Value> {
@@ -916,15 +786,7 @@ impl ArmClient {
                 self.subscription_id, DISK_API_VERSION
             ),
         };
-        debug!("GET {url}");
-        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
-            .context("Failed to list disks")?;
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("List disks failed ({status}): {body}");
-        }
-        resp.json().await.context("Failed to parse disks list")
+        self.arm_get_paginated(url, "list disks").await
     }
 
     pub async fn show_disk(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
@@ -949,15 +811,7 @@ impl ArmClient {
             "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/skus?api-version={}&$filter=resourceType%20eq%20%27disks%27",
             self.subscription_id, RESOURCE_SKU_API_VERSION
         );
-        debug!("GET {url}");
-        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
-            .context("Failed to list disk SKUs")?;
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("List disk SKUs failed ({status}): {body}");
-        }
-        resp.json().await.context("Failed to parse disk SKUs")
+        self.arm_get_paginated(url, "list disk SKUs").await
     }
 
     pub async fn list_images(&self, resource_group: Option<&str>) -> Result<serde_json::Value> {
@@ -971,15 +825,7 @@ impl ArmClient {
                 self.subscription_id, IMAGE_API_VERSION
             ),
         };
-        debug!("GET {url}");
-        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
-            .context("Failed to list images")?;
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("List images failed ({status}): {body}");
-        }
-        resp.json().await.context("Failed to parse images list")
+        self.arm_get_paginated(url, "list images").await
     }
 
     pub async fn show_image(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
@@ -1009,15 +855,7 @@ impl ArmClient {
                 self.subscription_id, IMAGE_BUILDER_API_VERSION
             ),
         };
-        debug!("GET {url}");
-        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
-            .context("Failed to list image templates")?;
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("List image templates failed ({status}): {body}");
-        }
-        resp.json().await.context("Failed to parse image templates list")
+        self.arm_get_paginated(url, "list image templates").await
     }
 
     pub async fn show_image_template(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
@@ -1041,15 +879,7 @@ impl ArmClient {
             "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.VirtualMachineImages/imageTemplates/{}/runOutputs?api-version={}",
             self.subscription_id, resource_group, name, IMAGE_BUILDER_API_VERSION
         );
-        debug!("GET {url}");
-        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
-            .context("Failed to list image template run outputs")?;
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("List image template run outputs failed ({status}): {body}");
-        }
-        resp.json().await.context("Failed to parse run outputs list")
+        self.arm_get_paginated(url, "list image template run outputs").await
     }
 
     pub async fn show_image_template_run_output(&self, resource_group: &str, name: &str, output_name: &str) -> Result<serde_json::Value> {
@@ -1080,6 +910,52 @@ impl ArmClient {
         resp.json().await.with_context(|| format!("Failed to parse {what} response"))
     }
 
+    async fn arm_get_paginated(&self, url: String, what: &'static str) -> Result<serde_json::Value> {
+        let mut all_values: Vec<serde_json::Value> = Vec::new();
+        let mut next = Some(url);
+        while let Some(u) = next.take() {
+            debug!("GET {u}");
+            let resp = self.client.get(&u).bearer_auth(&self.access_token).send().await
+                .with_context(|| format!("Failed to {what}"))?;
+            if !resp.status().is_success() {
+                let status = resp.status();
+                let body = resp.text().await.unwrap_or_default();
+                anyhow::bail!("{what} failed ({status}): {body}");
+            }
+            let mut page: serde_json::Value = resp.json().await
+                .with_context(|| format!("Failed to parse {what} response"))?;
+            if let Some(arr) = page.get_mut("value").and_then(|v| v.as_array_mut()) {
+                all_values.append(arr);
+            }
+            next = page.get("nextLink").and_then(|v| v.as_str()).map(|s| s.to_string());
+        }
+        Ok(serde_json::json!({ "value": all_values }))
+    }
+
+    async fn arm_list_paginated<T: serde::de::DeserializeOwned>(
+        &self,
+        url: String,
+        what: &'static str,
+    ) -> Result<Vec<T>> {
+        let mut all: Vec<T> = Vec::new();
+        let mut next = Some(url);
+        while let Some(u) = next.take() {
+            debug!("GET {u}");
+            let resp = self.client.get(&u).bearer_auth(&self.access_token).send().await
+                .with_context(|| format!("Failed to {what}"))?;
+            if !resp.status().is_success() {
+                let status = resp.status();
+                let body = resp.text().await.unwrap_or_default();
+                anyhow::bail!("{what} failed ({status}): {body}");
+            }
+            let page: AzureListResponse<T> = resp.json().await
+                .with_context(|| format!("Failed to parse {what} response"))?;
+            all.extend(page.value);
+            next = page.next_link;
+        }
+        Ok(all)
+    }
+
     pub async fn list_galleries(&self, resource_group: Option<&str>) -> Result<serde_json::Value> {
         let url = match resource_group {
             Some(rg) => format!(
@@ -1091,7 +967,7 @@ impl ArmClient {
                 self.subscription_id, SIG_API_VERSION
             ),
         };
-        self.arm_get(url, "list galleries").await
+        self.arm_get_paginated(url, "list galleries").await
     }
 
     pub async fn show_gallery(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
@@ -1108,7 +984,7 @@ impl ArmClient {
             "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/locations/{}/sharedGalleries?api-version={}{}",
             self.subscription_id, location, SIG_API_VERSION, suffix
         );
-        self.arm_get(url, "list shared galleries").await
+        self.arm_get_paginated(url, "list shared galleries").await
     }
 
     pub async fn show_shared_gallery(&self, location: &str, gallery_unique_name: &str) -> Result<serde_json::Value> {
@@ -1158,7 +1034,7 @@ impl ArmClient {
             "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/galleries/{}/images?api-version={}",
             self.subscription_id, resource_group, gallery_name, SIG_API_VERSION
         );
-        self.arm_get(url, "list gallery image definitions").await
+        self.arm_get_paginated(url, "list gallery image definitions").await
     }
 
     pub async fn show_gallery_image_definition(&self, resource_group: &str, gallery_name: &str, image_name: &str) -> Result<serde_json::Value> {
@@ -1174,7 +1050,7 @@ impl ArmClient {
             "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/locations/{}/sharedGalleries/{}/images?api-version={}",
             self.subscription_id, location, gallery_unique_name, SIG_API_VERSION
         );
-        self.arm_get(url, "list shared gallery image definitions").await
+        self.arm_get_paginated(url, "list shared gallery image definitions").await
     }
 
     pub async fn show_shared_gallery_image_definition(&self, location: &str, gallery_unique_name: &str, image_name: &str) -> Result<serde_json::Value> {
@@ -1190,7 +1066,7 @@ impl ArmClient {
             "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/locations/{}/communityGalleries/{}/images?api-version={}",
             self.subscription_id, location, public_gallery_name, SIG_API_VERSION
         );
-        self.arm_get(url, "list community gallery image definitions").await
+        self.arm_get_paginated(url, "list community gallery image definitions").await
     }
 
     pub async fn show_community_gallery_image_definition(&self, location: &str, public_gallery_name: &str, image_name: &str) -> Result<serde_json::Value> {
@@ -1206,7 +1082,7 @@ impl ArmClient {
             "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/galleries/{}/images/{}/versions?api-version={}",
             self.subscription_id, resource_group, gallery_name, image_name, SIG_API_VERSION
         );
-        self.arm_get(url, "list gallery image versions").await
+        self.arm_get_paginated(url, "list gallery image versions").await
     }
 
     pub async fn show_gallery_image_version(&self, resource_group: &str, gallery_name: &str, image_name: &str, version: &str) -> Result<serde_json::Value> {
@@ -1222,7 +1098,7 @@ impl ArmClient {
             "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/locations/{}/sharedGalleries/{}/images/{}/versions?api-version={}",
             self.subscription_id, location, gallery_unique_name, image_name, SIG_API_VERSION
         );
-        self.arm_get(url, "list shared gallery image versions").await
+        self.arm_get_paginated(url, "list shared gallery image versions").await
     }
 
     pub async fn show_shared_gallery_image_version(&self, location: &str, gallery_unique_name: &str, image_name: &str, version: &str) -> Result<serde_json::Value> {
@@ -1238,7 +1114,7 @@ impl ArmClient {
             "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/locations/{}/communityGalleries/{}/images/{}/versions?api-version={}",
             self.subscription_id, location, public_gallery_name, image_name, SIG_API_VERSION
         );
-        self.arm_get(url, "list community gallery image versions").await
+        self.arm_get_paginated(url, "list community gallery image versions").await
     }
 
     pub async fn show_community_gallery_image_version(&self, location: &str, public_gallery_name: &str, image_name: &str, version: &str) -> Result<serde_json::Value> {
@@ -1405,15 +1281,7 @@ impl ArmClient {
         if expand_instance_view {
             url.push_str("&$expand=instanceView");
         }
-        debug!("GET {url}");
-        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
-            .context("Failed to list VM run commands")?;
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("List VM run commands failed ({status}): {body}");
-        }
-        resp.json().await.context("Failed to parse list response")
+        self.arm_get_paginated(url, "list VM run commands").await
     }
 
     pub async fn show_vm_run_command(&self, resource_group: &str, vm_name: &str, name: &str, instance_view: bool) -> Result<serde_json::Value> {
@@ -1440,15 +1308,7 @@ impl ArmClient {
             "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/locations/{}/runCommands?api-version={}",
             self.subscription_id, location, COMPUTE_API_VERSION
         );
-        debug!("GET {url}");
-        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
-            .context("Failed to list built-in run commands")?;
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("List built-in run commands failed ({status}): {body}");
-        }
-        resp.json().await.context("Failed to parse list response")
+        self.arm_get_paginated(url, "list built-in run commands").await
     }
 
     pub async fn show_builtin_run_command(&self, location: &str, command_id: &str) -> Result<serde_json::Value> {
@@ -1594,15 +1454,7 @@ impl ArmClient {
             "https://management.azure.com{}/providers/Microsoft.Authorization/roleEligibilityScheduleInstances?api-version={}&$filter={}",
             scope, PIM_API_VERSION, encoded
         );
-        debug!("GET {url}");
-        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
-            .context("Failed to list eligible roles")?;
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("List eligible roles failed ({status}): {body}");
-        }
-        resp.json().await.context("Failed to parse eligible roles response")
+        self.arm_get_paginated(url, "list eligible roles").await
     }
 
     pub async fn list_active_role_schedules(&self, scope: &str, principal_id: &str) -> Result<serde_json::Value> {
@@ -1612,15 +1464,7 @@ impl ArmClient {
             "https://management.azure.com{}/providers/Microsoft.Authorization/roleAssignmentScheduleInstances?api-version={}&$filter={}",
             scope, PIM_API_VERSION, encoded
         );
-        debug!("GET {url}");
-        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
-            .context("Failed to list active assignments")?;
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("List active assignments failed ({status}): {body}");
-        }
-        resp.json().await.context("Failed to parse active assignments response")
+        self.arm_get_paginated(url, "list active assignments").await
     }
 
     pub async fn create_role_assignment_schedule_request(&self, scope: &str, request_name: &str, body: serde_json::Value) -> Result<serde_json::Value> {
@@ -1734,23 +1578,7 @@ impl ArmClient {
             "https://management.azure.com/subscriptions/{}/locations?api-version=2022-12-01",
             subscription_id
         );
-        debug!("GET {url}");
-
-        let resp = self
-            .client
-            .get(&url)
-            .bearer_auth(&self.access_token)
-            .send()
-            .await
-            .context("Failed to list locations")?;
-
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("List locations failed ({status}): {body}");
-        }
-
-        resp.json().await.context("Failed to parse locations response")
+        self.arm_get_paginated(url, "list locations").await
     }
 
     pub async fn list_vnets(&self, resource_group: Option<&str>) -> Result<serde_json::Value> {
@@ -1764,7 +1592,7 @@ impl ArmClient {
                 self.subscription_id, NETWORK_API_VERSION
             ),
         };
-        self.arm_get(url, "list virtual networks").await
+        self.arm_get_paginated(url, "list virtual networks").await
     }
 
     pub async fn show_vnet(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
@@ -1780,7 +1608,7 @@ impl ArmClient {
             "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/virtualNetworks/{}/subnets?api-version={}",
             self.subscription_id, resource_group, vnet_name, NETWORK_API_VERSION
         );
-        self.arm_get(url, "list subnets").await
+        self.arm_get_paginated(url, "list subnets").await
     }
 
     pub async fn show_subnet(&self, resource_group: &str, vnet_name: &str, name: &str) -> Result<serde_json::Value> {
@@ -1796,7 +1624,7 @@ impl ArmClient {
             "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/virtualNetworks/{}/virtualNetworkPeerings?api-version={}",
             self.subscription_id, resource_group, vnet_name, NETWORK_API_VERSION
         );
-        self.arm_get(url, "list vnet peerings").await
+        self.arm_get_paginated(url, "list vnet peerings").await
     }
 
     pub async fn show_vnet_peering(&self, resource_group: &str, vnet_name: &str, name: &str) -> Result<serde_json::Value> {
@@ -1818,7 +1646,7 @@ impl ArmClient {
                 self.subscription_id, NETWORK_API_VERSION
             ),
         };
-        self.arm_get(url, "list network security groups").await
+        self.arm_get_paginated(url, "list network security groups").await
     }
 
     pub async fn show_nsg(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
@@ -1834,7 +1662,7 @@ impl ArmClient {
             "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/networkSecurityGroups/{}/securityRules?api-version={}",
             self.subscription_id, resource_group, nsg_name, NETWORK_API_VERSION
         );
-        self.arm_get(url, "list nsg rules").await
+        self.arm_get_paginated(url, "list nsg rules").await
     }
 
     pub async fn show_nsg_rule(&self, resource_group: &str, nsg_name: &str, name: &str) -> Result<serde_json::Value> {
@@ -1856,7 +1684,7 @@ impl ArmClient {
                 self.subscription_id, NETWORK_API_VERSION
             ),
         };
-        self.arm_get(url, "list public IP addresses").await
+        self.arm_get_paginated(url, "list public IP addresses").await
     }
 
     pub async fn show_public_ip(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
@@ -1878,7 +1706,7 @@ impl ArmClient {
                 self.subscription_id, NETWORK_API_VERSION
             ),
         };
-        self.arm_get(url, "list network interfaces").await
+        self.arm_get_paginated(url, "list network interfaces").await
     }
 
     pub async fn show_nic(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
@@ -1894,7 +1722,7 @@ impl ArmClient {
             "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/networkInterfaces/{}/ipConfigurations?api-version={}",
             self.subscription_id, resource_group, nic_name, NETWORK_API_VERSION
         );
-        self.arm_get(url, "list nic ip configurations").await
+        self.arm_get_paginated(url, "list nic ip configurations").await
     }
 
     pub async fn show_nic_ip_config(&self, resource_group: &str, nic_name: &str, name: &str) -> Result<serde_json::Value> {
@@ -1916,7 +1744,7 @@ impl ArmClient {
                 self.subscription_id, NETWORK_API_VERSION
             ),
         };
-        self.arm_get(url, "list private endpoints").await
+        self.arm_get_paginated(url, "list private endpoints").await
     }
 
     pub async fn show_private_endpoint(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
