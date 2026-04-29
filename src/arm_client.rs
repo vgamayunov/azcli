@@ -1752,6 +1752,180 @@ impl ArmClient {
 
         resp.json().await.context("Failed to parse locations response")
     }
+
+    pub async fn list_vnets(&self, resource_group: Option<&str>) -> Result<serde_json::Value> {
+        let url = match resource_group {
+            Some(rg) => format!(
+                "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/virtualNetworks?api-version={}",
+                self.subscription_id, rg, NETWORK_API_VERSION
+            ),
+            None => format!(
+                "https://management.azure.com/subscriptions/{}/providers/Microsoft.Network/virtualNetworks?api-version={}",
+                self.subscription_id, NETWORK_API_VERSION
+            ),
+        };
+        self.arm_get(url, "list virtual networks").await
+    }
+
+    pub async fn show_vnet(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/virtualNetworks/{}?api-version={}",
+            self.subscription_id, resource_group, name, NETWORK_API_VERSION
+        );
+        self.arm_get(url, "get virtual network").await
+    }
+
+    pub async fn list_subnets(&self, resource_group: &str, vnet_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/virtualNetworks/{}/subnets?api-version={}",
+            self.subscription_id, resource_group, vnet_name, NETWORK_API_VERSION
+        );
+        self.arm_get(url, "list subnets").await
+    }
+
+    pub async fn show_subnet(&self, resource_group: &str, vnet_name: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/virtualNetworks/{}/subnets/{}?api-version={}",
+            self.subscription_id, resource_group, vnet_name, name, NETWORK_API_VERSION
+        );
+        self.arm_get(url, "get subnet").await
+    }
+
+    pub async fn list_vnet_peerings(&self, resource_group: &str, vnet_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/virtualNetworks/{}/virtualNetworkPeerings?api-version={}",
+            self.subscription_id, resource_group, vnet_name, NETWORK_API_VERSION
+        );
+        self.arm_get(url, "list vnet peerings").await
+    }
+
+    pub async fn show_vnet_peering(&self, resource_group: &str, vnet_name: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/virtualNetworks/{}/virtualNetworkPeerings/{}?api-version={}",
+            self.subscription_id, resource_group, vnet_name, name, NETWORK_API_VERSION
+        );
+        self.arm_get(url, "get vnet peering").await
+    }
+
+    pub async fn list_nsgs(&self, resource_group: Option<&str>) -> Result<serde_json::Value> {
+        let url = match resource_group {
+            Some(rg) => format!(
+                "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/networkSecurityGroups?api-version={}",
+                self.subscription_id, rg, NETWORK_API_VERSION
+            ),
+            None => format!(
+                "https://management.azure.com/subscriptions/{}/providers/Microsoft.Network/networkSecurityGroups?api-version={}",
+                self.subscription_id, NETWORK_API_VERSION
+            ),
+        };
+        self.arm_get(url, "list network security groups").await
+    }
+
+    pub async fn show_nsg(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/networkSecurityGroups/{}?api-version={}",
+            self.subscription_id, resource_group, name, NETWORK_API_VERSION
+        );
+        self.arm_get(url, "get network security group").await
+    }
+
+    pub async fn list_nsg_rules(&self, resource_group: &str, nsg_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/networkSecurityGroups/{}/securityRules?api-version={}",
+            self.subscription_id, resource_group, nsg_name, NETWORK_API_VERSION
+        );
+        self.arm_get(url, "list nsg rules").await
+    }
+
+    pub async fn show_nsg_rule(&self, resource_group: &str, nsg_name: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/networkSecurityGroups/{}/securityRules/{}?api-version={}",
+            self.subscription_id, resource_group, nsg_name, name, NETWORK_API_VERSION
+        );
+        self.arm_get(url, "get nsg rule").await
+    }
+
+    pub async fn list_public_ips(&self, resource_group: Option<&str>) -> Result<serde_json::Value> {
+        let url = match resource_group {
+            Some(rg) => format!(
+                "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/publicIPAddresses?api-version={}",
+                self.subscription_id, rg, NETWORK_API_VERSION
+            ),
+            None => format!(
+                "https://management.azure.com/subscriptions/{}/providers/Microsoft.Network/publicIPAddresses?api-version={}",
+                self.subscription_id, NETWORK_API_VERSION
+            ),
+        };
+        self.arm_get(url, "list public IP addresses").await
+    }
+
+    pub async fn show_public_ip(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/publicIPAddresses/{}?api-version={}",
+            self.subscription_id, resource_group, name, NETWORK_API_VERSION
+        );
+        self.arm_get(url, "get public IP address").await
+    }
+
+    pub async fn list_nics(&self, resource_group: Option<&str>) -> Result<serde_json::Value> {
+        let url = match resource_group {
+            Some(rg) => format!(
+                "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/networkInterfaces?api-version={}",
+                self.subscription_id, rg, NETWORK_API_VERSION
+            ),
+            None => format!(
+                "https://management.azure.com/subscriptions/{}/providers/Microsoft.Network/networkInterfaces?api-version={}",
+                self.subscription_id, NETWORK_API_VERSION
+            ),
+        };
+        self.arm_get(url, "list network interfaces").await
+    }
+
+    pub async fn show_nic(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/networkInterfaces/{}?api-version={}",
+            self.subscription_id, resource_group, name, NETWORK_API_VERSION
+        );
+        self.arm_get(url, "get network interface").await
+    }
+
+    pub async fn list_nic_ip_configs(&self, resource_group: &str, nic_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/networkInterfaces/{}/ipConfigurations?api-version={}",
+            self.subscription_id, resource_group, nic_name, NETWORK_API_VERSION
+        );
+        self.arm_get(url, "list nic ip configurations").await
+    }
+
+    pub async fn show_nic_ip_config(&self, resource_group: &str, nic_name: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/networkInterfaces/{}/ipConfigurations/{}?api-version={}",
+            self.subscription_id, resource_group, nic_name, name, NETWORK_API_VERSION
+        );
+        self.arm_get(url, "get nic ip configuration").await
+    }
+
+    pub async fn list_private_endpoints(&self, resource_group: Option<&str>) -> Result<serde_json::Value> {
+        let url = match resource_group {
+            Some(rg) => format!(
+                "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/privateEndpoints?api-version={}",
+                self.subscription_id, rg, NETWORK_API_VERSION
+            ),
+            None => format!(
+                "https://management.azure.com/subscriptions/{}/providers/Microsoft.Network/privateEndpoints?api-version={}",
+                self.subscription_id, NETWORK_API_VERSION
+            ),
+        };
+        self.arm_get(url, "list private endpoints").await
+    }
+
+    pub async fn show_private_endpoint(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/privateEndpoints/{}?api-version={}",
+            self.subscription_id, resource_group, name, NETWORK_API_VERSION
+        );
+        self.arm_get(url, "get private endpoint").await
+    }
 }
 
 fn urlencode(s: &str) -> String {

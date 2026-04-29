@@ -297,6 +297,85 @@ fn pick_table_columns(sample: &serde_json::Value) -> Vec<String> {
                 "properties.publicNames".to_string(),
             ];
         }
+        if t.eq_ignore_ascii_case("Microsoft.Network/virtualNetworks") {
+            return vec![
+                "name".to_string(),
+                "@resourceGroup".to_string(),
+                "location".to_string(),
+                "properties.addressSpace.addressPrefixes".to_string(),
+                "properties.provisioningState".to_string(),
+            ];
+        }
+        if t.eq_ignore_ascii_case("Microsoft.Network/virtualNetworks/subnets") {
+            return vec![
+                "name".to_string(),
+                "properties.addressPrefix".to_string(),
+                "properties.provisioningState".to_string(),
+            ];
+        }
+        if t.eq_ignore_ascii_case("Microsoft.Network/virtualNetworks/virtualNetworkPeerings") {
+            return vec![
+                "name".to_string(),
+                "properties.peeringState".to_string(),
+                "properties.peeringSyncLevel".to_string(),
+                "properties.provisioningState".to_string(),
+            ];
+        }
+        if t.eq_ignore_ascii_case("Microsoft.Network/networkSecurityGroups") {
+            return vec![
+                "name".to_string(),
+                "@resourceGroup".to_string(),
+                "location".to_string(),
+                "properties.provisioningState".to_string(),
+            ];
+        }
+        if t.eq_ignore_ascii_case("Microsoft.Network/networkSecurityGroups/securityRules") {
+            return vec![
+                "name".to_string(),
+                "properties.priority".to_string(),
+                "properties.direction".to_string(),
+                "properties.access".to_string(),
+                "properties.protocol".to_string(),
+                "properties.destinationPortRange".to_string(),
+            ];
+        }
+        if t.eq_ignore_ascii_case("Microsoft.Network/publicIPAddresses") {
+            return vec![
+                "name".to_string(),
+                "@resourceGroup".to_string(),
+                "location".to_string(),
+                "properties.ipAddress".to_string(),
+                "properties.publicIPAllocationMethod".to_string(),
+                "properties.provisioningState".to_string(),
+            ];
+        }
+        if t.eq_ignore_ascii_case("Microsoft.Network/networkInterfaces") {
+            return vec![
+                "name".to_string(),
+                "@resourceGroup".to_string(),
+                "location".to_string(),
+                "properties.macAddress".to_string(),
+                "properties.primary".to_string(),
+                "properties.provisioningState".to_string(),
+            ];
+        }
+        if t.eq_ignore_ascii_case("Microsoft.Network/networkInterfaces/ipConfigurations") {
+            return vec![
+                "name".to_string(),
+                "properties.privateIPAddress".to_string(),
+                "properties.privateIPAllocationMethod".to_string(),
+                "properties.primary".to_string(),
+                "properties.provisioningState".to_string(),
+            ];
+        }
+        if t.eq_ignore_ascii_case("Microsoft.Network/privateEndpoints") {
+            return vec![
+                "name".to_string(),
+                "@resourceGroup".to_string(),
+                "location".to_string(),
+                "properties.provisioningState".to_string(),
+            ];
+        }
     }
 
     if obj.contains_key("identifier") && obj.contains_key("uniqueId") && obj.get("location").is_some() {
@@ -304,6 +383,51 @@ fn pick_table_columns(sample: &serde_json::Value) -> Vec<String> {
             "name".to_string(),
             "location".to_string(),
             "identifier.uniqueId".to_string(),
+        ];
+    }
+
+    if resolve_path(sample, "properties.addressPrefix").is_some()
+        && resolve_path(sample, "properties.privateEndpointNetworkPolicies").is_some()
+    {
+        return vec![
+            "name".to_string(),
+            "properties.addressPrefix".to_string(),
+            "properties.provisioningState".to_string(),
+        ];
+    }
+
+    if resolve_path(sample, "properties.peeringState").is_some() {
+        return vec![
+            "name".to_string(),
+            "properties.peeringState".to_string(),
+            "properties.peeringSyncLevel".to_string(),
+            "properties.provisioningState".to_string(),
+        ];
+    }
+
+    if resolve_path(sample, "properties.priority").is_some()
+        && resolve_path(sample, "properties.direction").is_some()
+        && resolve_path(sample, "properties.access").is_some()
+    {
+        return vec![
+            "name".to_string(),
+            "properties.priority".to_string(),
+            "properties.direction".to_string(),
+            "properties.access".to_string(),
+            "properties.protocol".to_string(),
+            "properties.destinationPortRange".to_string(),
+        ];
+    }
+
+    if resolve_path(sample, "properties.privateIPAddress").is_some()
+        && resolve_path(sample, "properties.privateIPAllocationMethod").is_some()
+    {
+        return vec![
+            "name".to_string(),
+            "properties.privateIPAddress".to_string(),
+            "properties.privateIPAllocationMethod".to_string(),
+            "properties.primary".to_string(),
+            "properties.provisioningState".to_string(),
         ];
     }
 

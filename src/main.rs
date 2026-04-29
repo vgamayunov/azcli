@@ -1547,6 +1547,184 @@ enum NetworkCommand {
         #[command(subcommand)]
         command: BastionCommand,
     },
+    Vnet {
+        #[command(subcommand)]
+        command: VnetCommand,
+    },
+    Nsg {
+        #[command(subcommand)]
+        command: NsgCommand,
+    },
+    PublicIp {
+        #[command(subcommand)]
+        command: PublicIpCommand,
+    },
+    Nic {
+        #[command(subcommand)]
+        command: NicCommand,
+    },
+    PrivateEndpoint {
+        #[command(subcommand)]
+        command: PrivateEndpointCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum VnetCommand {
+    List {
+        #[arg(short = 'g', long)]
+        resource_group: Option<String>,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+    Subnet {
+        #[command(subcommand)]
+        command: VnetSubnetCommand,
+    },
+    Peering {
+        #[command(subcommand)]
+        command: VnetPeeringCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum VnetSubnetCommand {
+    List {
+        #[arg(short = 'g', long)]
+        resource_group: String,
+        #[arg(long)]
+        vnet_name: String,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+        #[arg(long)]
+        vnet_name: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum VnetPeeringCommand {
+    List {
+        #[arg(short = 'g', long)]
+        resource_group: String,
+        #[arg(long)]
+        vnet_name: String,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+        #[arg(long)]
+        vnet_name: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum NsgCommand {
+    List {
+        #[arg(short = 'g', long)]
+        resource_group: Option<String>,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+    Rule {
+        #[command(subcommand)]
+        command: NsgRuleCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum NsgRuleCommand {
+    List {
+        #[arg(short = 'g', long)]
+        resource_group: String,
+        #[arg(long)]
+        nsg_name: String,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+        #[arg(long)]
+        nsg_name: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum PublicIpCommand {
+    List {
+        #[arg(short = 'g', long)]
+        resource_group: Option<String>,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum NicCommand {
+    List {
+        #[arg(short = 'g', long)]
+        resource_group: Option<String>,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+    IpConfig {
+        #[command(subcommand)]
+        command: NicIpConfigCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum NicIpConfigCommand {
+    List {
+        #[arg(short = 'g', long)]
+        resource_group: String,
+        #[arg(long)]
+        nic_name: String,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+        #[arg(long)]
+        nic_name: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum PrivateEndpointCommand {
+    List {
+        #[arg(short = 'g', long)]
+        resource_group: Option<String>,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1866,6 +2044,21 @@ async fn main() -> anyhow::Result<()> {
             NetworkCommand::Bastion { command } => {
                 handle_bastion(command, output_format, subscription).await?;
                 Ok(())
+            }
+            NetworkCommand::Vnet { command } => {
+                handle_network_vnet(command, output_format, subscription).await
+            }
+            NetworkCommand::Nsg { command } => {
+                handle_network_nsg(command, output_format, subscription).await
+            }
+            NetworkCommand::PublicIp { command } => {
+                handle_network_public_ip(command, output_format, subscription).await
+            }
+            NetworkCommand::Nic { command } => {
+                handle_network_nic(command, output_format, subscription).await
+            }
+            NetworkCommand::PrivateEndpoint { command } => {
+                handle_network_private_endpoint(command, output_format, subscription).await
             }
         },
 
@@ -2919,6 +3112,156 @@ async fn handle_bastion(
                 timeout,
             )
             .await
+        }
+    }
+}
+
+async fn handle_network_vnet(
+    cmd: VnetCommand,
+    output_format: OutputFormat,
+    subscription: Option<String>,
+) -> anyhow::Result<()> {
+    let mut provider = auth::TokenProvider::load(subscription)?;
+    let access_token = provider.get_access_token().await?;
+    let subscription_id = provider.get_subscription_id_or_fallback().await?;
+    let client = arm_client::ArmClient::new(access_token, subscription_id);
+
+    match cmd {
+        VnetCommand::List { resource_group } => {
+            let value = commands::network::vnet::list::execute(&client, resource_group.as_deref()).await?;
+            output::print_output(&value, output_format)
+        }
+        VnetCommand::Show { name, resource_group } => {
+            let value = commands::network::vnet::show::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format)
+        }
+        VnetCommand::Subnet { command } => match command {
+            VnetSubnetCommand::List { resource_group, vnet_name } => {
+                let value = commands::network::vnet::list_subnets::execute(&client, &resource_group, &vnet_name).await?;
+                output::print_output(&value, output_format)
+            }
+            VnetSubnetCommand::Show { name, resource_group, vnet_name } => {
+                let value = commands::network::vnet::show_subnet::execute(&client, &resource_group, &vnet_name, &name).await?;
+                output::print_output(&value, output_format)
+            }
+        },
+        VnetCommand::Peering { command } => match command {
+            VnetPeeringCommand::List { resource_group, vnet_name } => {
+                let value = commands::network::vnet::list_peerings::execute(&client, &resource_group, &vnet_name).await?;
+                output::print_output(&value, output_format)
+            }
+            VnetPeeringCommand::Show { name, resource_group, vnet_name } => {
+                let value = commands::network::vnet::show_peering::execute(&client, &resource_group, &vnet_name, &name).await?;
+                output::print_output(&value, output_format)
+            }
+        },
+    }
+}
+
+async fn handle_network_nsg(
+    cmd: NsgCommand,
+    output_format: OutputFormat,
+    subscription: Option<String>,
+) -> anyhow::Result<()> {
+    let mut provider = auth::TokenProvider::load(subscription)?;
+    let access_token = provider.get_access_token().await?;
+    let subscription_id = provider.get_subscription_id_or_fallback().await?;
+    let client = arm_client::ArmClient::new(access_token, subscription_id);
+
+    match cmd {
+        NsgCommand::List { resource_group } => {
+            let value = commands::network::nsg::list::execute(&client, resource_group.as_deref()).await?;
+            output::print_output(&value, output_format)
+        }
+        NsgCommand::Show { name, resource_group } => {
+            let value = commands::network::nsg::show::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format)
+        }
+        NsgCommand::Rule { command } => match command {
+            NsgRuleCommand::List { resource_group, nsg_name } => {
+                let value = commands::network::nsg::list_rules::execute(&client, &resource_group, &nsg_name).await?;
+                output::print_output(&value, output_format)
+            }
+            NsgRuleCommand::Show { name, resource_group, nsg_name } => {
+                let value = commands::network::nsg::show_rule::execute(&client, &resource_group, &nsg_name, &name).await?;
+                output::print_output(&value, output_format)
+            }
+        },
+    }
+}
+
+async fn handle_network_public_ip(
+    cmd: PublicIpCommand,
+    output_format: OutputFormat,
+    subscription: Option<String>,
+) -> anyhow::Result<()> {
+    let mut provider = auth::TokenProvider::load(subscription)?;
+    let access_token = provider.get_access_token().await?;
+    let subscription_id = provider.get_subscription_id_or_fallback().await?;
+    let client = arm_client::ArmClient::new(access_token, subscription_id);
+
+    match cmd {
+        PublicIpCommand::List { resource_group } => {
+            let value = commands::network::public_ip::list::execute(&client, resource_group.as_deref()).await?;
+            output::print_output(&value, output_format)
+        }
+        PublicIpCommand::Show { name, resource_group } => {
+            let value = commands::network::public_ip::show::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format)
+        }
+    }
+}
+
+async fn handle_network_nic(
+    cmd: NicCommand,
+    output_format: OutputFormat,
+    subscription: Option<String>,
+) -> anyhow::Result<()> {
+    let mut provider = auth::TokenProvider::load(subscription)?;
+    let access_token = provider.get_access_token().await?;
+    let subscription_id = provider.get_subscription_id_or_fallback().await?;
+    let client = arm_client::ArmClient::new(access_token, subscription_id);
+
+    match cmd {
+        NicCommand::List { resource_group } => {
+            let value = commands::network::nic::list::execute(&client, resource_group.as_deref()).await?;
+            output::print_output(&value, output_format)
+        }
+        NicCommand::Show { name, resource_group } => {
+            let value = commands::network::nic::show::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format)
+        }
+        NicCommand::IpConfig { command } => match command {
+            NicIpConfigCommand::List { resource_group, nic_name } => {
+                let value = commands::network::nic::list_ip_configs::execute(&client, &resource_group, &nic_name).await?;
+                output::print_output(&value, output_format)
+            }
+            NicIpConfigCommand::Show { name, resource_group, nic_name } => {
+                let value = commands::network::nic::show_ip_config::execute(&client, &resource_group, &nic_name, &name).await?;
+                output::print_output(&value, output_format)
+            }
+        },
+    }
+}
+
+async fn handle_network_private_endpoint(
+    cmd: PrivateEndpointCommand,
+    output_format: OutputFormat,
+    subscription: Option<String>,
+) -> anyhow::Result<()> {
+    let mut provider = auth::TokenProvider::load(subscription)?;
+    let access_token = provider.get_access_token().await?;
+    let subscription_id = provider.get_subscription_id_or_fallback().await?;
+    let client = arm_client::ArmClient::new(access_token, subscription_id);
+
+    match cmd {
+        PrivateEndpointCommand::List { resource_group } => {
+            let value = commands::network::private_endpoint::list::execute(&client, resource_group.as_deref()).await?;
+            output::print_output(&value, output_format)
+        }
+        PrivateEndpointCommand::Show { name, resource_group } => {
+            let value = commands::network::private_endpoint::show::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format)
         }
     }
 }

@@ -6,6 +6,7 @@ pub mod disk;
 pub mod group;
 pub mod image;
 pub mod list;
+pub mod network;
 pub mod rdp;
 pub mod rest;
 pub mod role;
