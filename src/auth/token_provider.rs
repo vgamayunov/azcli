@@ -137,8 +137,10 @@ impl TokenProvider {
     }
 
     pub async fn login_interactive(&mut self, tenant: Option<&str>) -> Result<()> {
-        let mut account = super::interactive::login(tenant).await?;
-        self.resolve_subscription(&mut account).await?;
+        let (effective_tenant, previous_sub) = self.previous_login_hints(tenant);
+        let mut account = super::interactive::login(effective_tenant.as_deref()).await?;
+        self.resolve_subscription_with_preference(&mut account, previous_sub.as_deref())
+            .await?;
         self.cache.set_account(account);
         self.cache.save()?;
         self.print_login_info();
@@ -146,12 +148,25 @@ impl TokenProvider {
     }
 
     pub async fn login_device_code(&mut self, tenant: Option<&str>) -> Result<()> {
-        let mut account = super::device_code::login(tenant).await?;
-        self.resolve_subscription(&mut account).await?;
+        let (effective_tenant, previous_sub) = self.previous_login_hints(tenant);
+        let mut account = super::device_code::login(effective_tenant.as_deref()).await?;
+        self.resolve_subscription_with_preference(&mut account, previous_sub.as_deref())
+            .await?;
         self.cache.set_account(account);
         self.cache.save()?;
         self.print_login_info();
         Ok(())
+    }
+
+    fn previous_login_hints(&self, tenant: Option<&str>) -> (Option<String>, Option<String>) {
+        let prev_account = self.cache.active_account();
+        let prev_tenant = prev_account.map(|a| a.tenant_id.clone()).filter(|t| {
+            !t.is_empty() && t != "managed-identity" && t != "common" && t != "organizations"
+        });
+        let prev_sub = prev_account.and_then(|a| a.subscription_id.clone());
+
+        let effective_tenant = tenant.map(str::to_string).or(prev_tenant);
+        (effective_tenant, prev_sub)
     }
 
     pub async fn login_service_principal(
@@ -266,6 +281,14 @@ impl TokenProvider {
     }
 
     async fn resolve_subscription(&self, account: &mut CachedAccount) -> Result<()> {
+        self.resolve_subscription_with_preference(account, None).await
+    }
+
+    async fn resolve_subscription_with_preference(
+        &self,
+        account: &mut CachedAccount,
+        preferred_subscription_id: Option<&str>,
+    ) -> Result<()> {
         let token = match account.access_token {
             Some(ref t) => t.clone(),
             None => return Ok(()),
@@ -296,7 +319,13 @@ impl TokenProvider {
                     eprintln!("  [{}] {} ({}) - {}", i + 1, name, sub_id, state);
                 }
 
-                let sub = &subs[0];
+                let sub = preferred_subscription_id
+                    .and_then(|pref| {
+                        subs.iter()
+                            .find(|s| strip_subscription_prefix(&s.id) == pref)
+                    })
+                    .unwrap_or(&subs[0]);
+
                 account.subscription_id = Some(strip_subscription_prefix(&sub.id));
                 account.subscription_name = sub.display_name.clone();
                 if let Some(ref tid) = sub.tenant_id {

@@ -28,6 +28,10 @@ azcli logout
 
 Tokens are cached at `~/.azure/azcli_tokens.json` with automatic refresh.
 
+## Default Tenant & Subscription on Re-login
+
+When `azcli login` (or `azcli login --use-device-code`) is invoked without `--tenant`, azcli reuses the tenant from the previous cached login. After login completes, if the previously active subscription is still accessible in that tenant, it is restored as the default. Pass `--tenant` explicitly to switch tenants.
+
 ## Commands
 
 | Command | Description |
