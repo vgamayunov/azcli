@@ -6,3 +6,4 @@ pub mod private_endpoint;
 pub mod public_ip;
 pub mod route_table;
 pub mod vnet;
+pub mod watcher;

@@ -1582,6 +1582,10 @@ enum NetworkCommand {
         #[command(subcommand)]
         command: DnsCommand,
     },
+    Watcher {
+        #[command(subcommand)]
+        command: WatcherCommand,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1999,6 +2003,84 @@ enum DnsRecordSetCommand {
 }
 
 
+#[derive(Subcommand)]
+enum WatcherCommand {
+    List,
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+    ConnectionMonitor {
+        #[command(subcommand)]
+        command: WatcherConnectionMonitorCommand,
+    },
+    FlowLog {
+        #[command(subcommand)]
+        command: WatcherFlowLogCommand,
+    },
+    PacketCapture {
+        #[command(subcommand)]
+        command: WatcherPacketCaptureCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum WatcherConnectionMonitorCommand {
+    List {
+        #[arg(short, long)]
+        watcher_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        watcher_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum WatcherFlowLogCommand {
+    List {
+        #[arg(short, long)]
+        watcher_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        watcher_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum WatcherPacketCaptureCommand {
+    List {
+        #[arg(short, long)]
+        watcher_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        watcher_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+
 
 
 #[derive(Subcommand)]
@@ -2343,6 +2425,9 @@ async fn main() -> anyhow::Result<()> {
             }
             NetworkCommand::Dns { command } => {
                 handle_network_dns(command, output_format, subscription, query.as_deref()).await
+            }
+            NetworkCommand::Watcher { command } => {
+                handle_network_watcher(command, output_format, subscription, query.as_deref()).await
             }
         }
 
@@ -3751,3 +3836,62 @@ async fn handle_network_dns(
 
 
 
+
+async fn handle_network_watcher(
+    cmd: WatcherCommand,
+    output_format: OutputFormat,
+    subscription: Option<String>,
+    query: Option<&str>,
+) -> anyhow::Result<()> {
+    let mut provider = auth::TokenProvider::load(subscription)?;
+    let access_token = provider.get_access_token().await?;
+    let subscription_id = provider.get_subscription_id_or_fallback().await?;
+    let client = arm_client::ArmClient::new(access_token, subscription_id);
+
+    match cmd {
+        WatcherCommand::List => {
+            let value = commands::network::watcher::list::execute(&client).await?;
+            output::print_output(&value, output_format, query)
+        }
+        WatcherCommand::Show { name, resource_group } => {
+            let value = commands::network::watcher::show::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format, query)
+        }
+        WatcherCommand::ConnectionMonitor { command } => {
+            match command {
+                WatcherConnectionMonitorCommand::List { watcher_name, resource_group } => {
+                    let value = commands::network::watcher::connection_monitor_list::execute(&client, &resource_group, &watcher_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+                WatcherConnectionMonitorCommand::Show { name, watcher_name, resource_group } => {
+                    let value = commands::network::watcher::connection_monitor_show::execute(&client, &resource_group, &watcher_name, &name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+        WatcherCommand::FlowLog { command } => {
+            match command {
+                WatcherFlowLogCommand::List { watcher_name, resource_group } => {
+                    let value = commands::network::watcher::flow_log_list::execute(&client, &resource_group, &watcher_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+                WatcherFlowLogCommand::Show { name, watcher_name, resource_group } => {
+                    let value = commands::network::watcher::flow_log_show::execute(&client, &resource_group, &watcher_name, &name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+        WatcherCommand::PacketCapture { command } => {
+            match command {
+                WatcherPacketCaptureCommand::List { watcher_name, resource_group } => {
+                    let value = commands::network::watcher::packet_capture_list::execute(&client, &resource_group, &watcher_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+                WatcherPacketCaptureCommand::Show { name, watcher_name, resource_group } => {
+                    let value = commands::network::watcher::packet_capture_show::execute(&client, &resource_group, &watcher_name, &name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+    }
+}

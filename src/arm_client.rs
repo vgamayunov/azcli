@@ -1995,6 +1995,71 @@ impl ArmClient {
         self.arm_get(url, "get DNS record set").await
     }
 
+
+    pub async fn list_network_watchers(&self) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/providers/Microsoft.Network/networkWatchers?api-version=2023-11-01",
+            self.subscription_id
+        );
+        self.arm_get_paginated(url, "list network watchers").await
+    }
+
+    pub async fn show_network_watcher(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/networkWatchers/{}?api-version=2023-11-01",
+            self.subscription_id, resource_group, name
+        );
+        self.arm_get(url, "get network watcher").await
+    }
+
+    pub async fn list_connection_monitors(&self, resource_group: &str, watcher_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/networkWatchers/{}/connectionMonitors?api-version=2023-11-01",
+            self.subscription_id, resource_group, watcher_name
+        );
+        self.arm_get_paginated(url, "list connection monitors").await
+    }
+
+    pub async fn show_connection_monitor(&self, resource_group: &str, watcher_name: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/networkWatchers/{}/connectionMonitors/{}?api-version=2023-11-01",
+            self.subscription_id, resource_group, watcher_name, name
+        );
+        self.arm_get(url, "get connection monitor").await
+    }
+
+    pub async fn list_flow_logs(&self, resource_group: &str, watcher_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/networkWatchers/{}/flowLogs?api-version=2023-11-01",
+            self.subscription_id, resource_group, watcher_name
+        );
+        self.arm_get_paginated(url, "list flow logs").await
+    }
+
+    pub async fn show_flow_log(&self, resource_group: &str, watcher_name: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/networkWatchers/{}/flowLogs/{}?api-version=2023-11-01",
+            self.subscription_id, resource_group, watcher_name, name
+        );
+        self.arm_get(url, "get flow log").await
+    }
+
+    pub async fn list_packet_captures(&self, resource_group: &str, watcher_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/networkWatchers/{}/packetCaptures?api-version=2023-11-01",
+            self.subscription_id, resource_group, watcher_name
+        );
+        self.arm_get_paginated(url, "list packet captures").await
+    }
+
+    pub async fn show_packet_capture(&self, resource_group: &str, watcher_name: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/networkWatchers/{}/packetCaptures/{}?api-version=2023-11-01",
+            self.subscription_id, resource_group, watcher_name, name
+        );
+        self.arm_get(url, "get packet capture").await
+    }
+
 }
 
 
