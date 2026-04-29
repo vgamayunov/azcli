@@ -1598,6 +1598,22 @@ enum NetworkCommand {
         #[command(subcommand)]
         command: PrivateDnsCommand,
     },
+    VpnGateway {
+        #[command(subcommand)]
+        command: VpnGatewayCommand,
+    },
+    ExpressRoute {
+        #[command(subcommand)]
+        command: ExpressRouteCommand,
+    },
+    TrafficManager {
+        #[command(subcommand)]
+        command: TrafficManagerCommand,
+    },
+    Firewall {
+        #[command(subcommand)]
+        command: FirewallCommand,
+    },
 }
 
 #[derive(Subcommand)]
@@ -2381,6 +2397,63 @@ enum PrivateDnsRecordSetCommand {
     },
 }
 
+#[derive(Subcommand)]
+enum VpnGatewayCommand {
+    List {
+        #[arg(short = 'g', long)]
+        resource_group: Option<String>,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ExpressRouteCommand {
+    List {
+        #[arg(short = 'g', long)]
+        resource_group: Option<String>,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum TrafficManagerCommand {
+    List {
+        #[arg(short = 'g', long)]
+        resource_group: Option<String>,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum FirewallCommand {
+    List {
+        #[arg(short = 'g', long)]
+        resource_group: Option<String>,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+
 
 
 
@@ -2738,6 +2811,18 @@ async fn main() -> anyhow::Result<()> {
             }
             NetworkCommand::PrivateDns { command } => {
                 handle_network_private_dns(command, output_format, subscription, query.as_deref()).await
+            }
+            NetworkCommand::VpnGateway { command } => {
+                handle_network_vpn_gateway(command, output_format, subscription, query.as_deref()).await
+            }
+            NetworkCommand::ExpressRoute { command } => {
+                handle_network_express_route(command, output_format, subscription, query.as_deref()).await
+            }
+            NetworkCommand::TrafficManager { command } => {
+                handle_network_traffic_manager(command, output_format, subscription, query.as_deref()).await
+            }
+            NetworkCommand::Firewall { command } => {
+                handle_network_firewall(command, output_format, subscription, query.as_deref()).await
             }
         }
 
@@ -4411,6 +4496,98 @@ async fn handle_network_private_dns(
                     output::print_output(&value, output_format, query)
                 }
             }
+        }
+    }
+}
+
+async fn handle_network_vpn_gateway(
+    cmd: VpnGatewayCommand,
+    output_format: OutputFormat,
+    subscription: Option<String>,
+    query: Option<&str>,
+) -> anyhow::Result<()> {
+    let mut provider = auth::TokenProvider::load(subscription)?;
+    let access_token = provider.get_access_token().await?;
+    let subscription_id = provider.get_subscription_id_or_fallback().await?;
+    let client = arm_client::ArmClient::new(access_token, subscription_id);
+
+    match cmd {
+        VpnGatewayCommand::List { resource_group: _ } => {
+            let value = commands::network::vpn_gateway::list::execute(&client).await?;
+            output::print_output(&value, output_format, query)
+        }
+        VpnGatewayCommand::Show { name, resource_group } => {
+            let value = commands::network::vpn_gateway::show::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format, query)
+        }
+    }
+}
+
+async fn handle_network_express_route(
+    cmd: ExpressRouteCommand,
+    output_format: OutputFormat,
+    subscription: Option<String>,
+    query: Option<&str>,
+) -> anyhow::Result<()> {
+    let mut provider = auth::TokenProvider::load(subscription)?;
+    let access_token = provider.get_access_token().await?;
+    let subscription_id = provider.get_subscription_id_or_fallback().await?;
+    let client = arm_client::ArmClient::new(access_token, subscription_id);
+
+    match cmd {
+        ExpressRouteCommand::List { resource_group: _ } => {
+            let value = commands::network::express_route::list::execute(&client).await?;
+            output::print_output(&value, output_format, query)
+        }
+        ExpressRouteCommand::Show { name, resource_group } => {
+            let value = commands::network::express_route::show::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format, query)
+        }
+    }
+}
+
+async fn handle_network_traffic_manager(
+    cmd: TrafficManagerCommand,
+    output_format: OutputFormat,
+    subscription: Option<String>,
+    query: Option<&str>,
+) -> anyhow::Result<()> {
+    let mut provider = auth::TokenProvider::load(subscription)?;
+    let access_token = provider.get_access_token().await?;
+    let subscription_id = provider.get_subscription_id_or_fallback().await?;
+    let client = arm_client::ArmClient::new(access_token, subscription_id);
+
+    match cmd {
+        TrafficManagerCommand::List { resource_group: _ } => {
+            let value = commands::network::traffic_manager::list::execute(&client).await?;
+            output::print_output(&value, output_format, query)
+        }
+        TrafficManagerCommand::Show { name, resource_group } => {
+            let value = commands::network::traffic_manager::show::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format, query)
+        }
+    }
+}
+
+async fn handle_network_firewall(
+    cmd: FirewallCommand,
+    output_format: OutputFormat,
+    subscription: Option<String>,
+    query: Option<&str>,
+) -> anyhow::Result<()> {
+    let mut provider = auth::TokenProvider::load(subscription)?;
+    let access_token = provider.get_access_token().await?;
+    let subscription_id = provider.get_subscription_id_or_fallback().await?;
+    let client = arm_client::ArmClient::new(access_token, subscription_id);
+
+    match cmd {
+        FirewallCommand::List { resource_group: _ } => {
+            let value = commands::network::firewall::list::execute(&client).await?;
+            output::print_output(&value, output_format, query)
+        }
+        FirewallCommand::Show { name, resource_group } => {
+            let value = commands::network::firewall::show::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format, query)
         }
     }
 }

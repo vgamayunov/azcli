@@ -2294,6 +2294,71 @@ impl ArmClient {
         self.arm_get(url, "get private DNS record set").await
     }
 
+
+    pub async fn list_vpn_gateways(&self) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/providers/Microsoft.Network/vpnGateways?api-version=2023-11-01",
+            self.subscription_id
+        );
+        self.arm_get_paginated(url, "list VPN gateways").await
+    }
+
+    pub async fn show_vpn_gateway(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/vpnGateways/{}?api-version=2023-11-01",
+            self.subscription_id, resource_group, name
+        );
+        self.arm_get(url, "get VPN gateway").await
+    }
+
+    pub async fn list_express_routes(&self) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/providers/Microsoft.Network/expressRouteCircuits?api-version=2023-11-01",
+            self.subscription_id
+        );
+        self.arm_get_paginated(url, "list Express Route circuits").await
+    }
+
+    pub async fn show_express_route(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/expressRouteCircuits/{}?api-version=2023-11-01",
+            self.subscription_id, resource_group, name
+        );
+        self.arm_get(url, "get Express Route circuit").await
+    }
+
+    pub async fn list_traffic_manager_profiles(&self) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/providers/Microsoft.Network/trafficManagerProfiles?api-version=2018-08-01",
+            self.subscription_id
+        );
+        self.arm_get_paginated(url, "list Traffic Manager profiles").await
+    }
+
+    pub async fn show_traffic_manager_profile(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/trafficManagerProfiles/{}?api-version=2018-08-01",
+            self.subscription_id, resource_group, name
+        );
+        self.arm_get(url, "get Traffic Manager profile").await
+    }
+
+    pub async fn list_firewalls(&self) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/providers/Microsoft.Network/azureFirewalls?api-version=2023-11-01",
+            self.subscription_id
+        );
+        self.arm_get_paginated(url, "list firewalls").await
+    }
+
+    pub async fn show_firewall(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/azureFirewalls/{}?api-version=2023-11-01",
+            self.subscription_id, resource_group, name
+        );
+        self.arm_get(url, "get firewall").await
+    }
+
 }
 
 

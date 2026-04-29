@@ -1,5 +1,7 @@
 pub mod application_gateway;
 pub mod dns;
+pub mod express_route;
+pub mod firewall;
 pub mod lb;
 pub mod nat;
 pub mod nic;
@@ -8,5 +10,7 @@ pub mod private_dns;
 pub mod private_endpoint;
 pub mod public_ip;
 pub mod route_table;
+pub mod traffic_manager;
 pub mod vnet;
+pub mod vpn_gateway;
 pub mod watcher;
