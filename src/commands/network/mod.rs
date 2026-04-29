@@ -1,3 +1,4 @@
+pub mod lb;
 pub mod nic;
 pub mod nsg;
 pub mod private_endpoint;

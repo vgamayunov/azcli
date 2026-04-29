@@ -1570,6 +1570,10 @@ enum NetworkCommand {
         #[command(subcommand)]
         command: PrivateEndpointCommand,
     },
+    Lb {
+        #[command(subcommand)]
+        command: LoadBalancerCommand,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1729,6 +1733,187 @@ enum PrivateEndpointCommand {
         resource_group: String,
     },
 }
+
+#[derive(Subcommand)]
+enum LoadBalancerCommand {
+    List {
+        #[arg(short = 'g', long)]
+        resource_group: Option<String>,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+    ListMapping {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+    ListNic {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+    AddressPool {
+        #[command(subcommand)]
+        command: LoadBalancerAddressPoolCommand,
+    },
+    FrontendIp {
+        #[command(subcommand)]
+        command: LoadBalancerFrontendIpCommand,
+    },
+    InboundNatPool {
+        #[command(subcommand)]
+        command: LoadBalancerInboundNatPoolCommand,
+    },
+    InboundNatRule {
+        #[command(subcommand)]
+        command: LoadBalancerInboundNatRuleCommand,
+    },
+    OutboundRule {
+        #[command(subcommand)]
+        command: LoadBalancerOutboundRuleCommand,
+    },
+    Probe {
+        #[command(subcommand)]
+        command: LoadBalancerProbeCommand,
+    },
+    Rule {
+        #[command(subcommand)]
+        command: LoadBalancerRuleCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum LoadBalancerAddressPoolCommand {
+    List {
+        #[arg(short, long)]
+        lb_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        lb_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum LoadBalancerFrontendIpCommand {
+    List {
+        #[arg(short, long)]
+        lb_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        lb_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum LoadBalancerInboundNatPoolCommand {
+    List {
+        #[arg(short, long)]
+        lb_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        lb_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum LoadBalancerInboundNatRuleCommand {
+    List {
+        #[arg(short, long)]
+        lb_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        lb_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum LoadBalancerOutboundRuleCommand {
+    List {
+        #[arg(short, long)]
+        lb_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        lb_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum LoadBalancerProbeCommand {
+    List {
+        #[arg(short, long)]
+        lb_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        lb_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum LoadBalancerRuleCommand {
+    List {
+        #[arg(short, long)]
+        lb_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        lb_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
 
 #[derive(Subcommand)]
 enum BastionCommand {
@@ -2064,7 +2249,10 @@ async fn main() -> anyhow::Result<()> {
             NetworkCommand::PrivateEndpoint { command } => {
                 handle_network_private_endpoint(command, output_format, subscription, query.as_deref()).await
             }
-        },
+            NetworkCommand::Lb { command } => {
+                handle_network_lb(command, output_format, subscription, query.as_deref()).await
+            }
+        }
 
         CliCommand::Rest {
             url,
@@ -3283,3 +3471,119 @@ async fn handle_network_private_endpoint(
         }
     }
 }
+
+async fn handle_network_lb(
+    cmd: LoadBalancerCommand,
+    output_format: OutputFormat,
+    subscription: Option<String>,
+    query: Option<&str>,
+) -> anyhow::Result<()> {
+    let mut provider = auth::TokenProvider::load(subscription)?;
+    let access_token = provider.get_access_token().await?;
+    let subscription_id = provider.get_subscription_id_or_fallback().await?;
+    let client = arm_client::ArmClient::new(access_token, subscription_id);
+
+    match cmd {
+        LoadBalancerCommand::List { resource_group } => {
+            let value = commands::network::lb::list::execute(&client, resource_group.as_deref()).await?;
+            output::print_output(&value, output_format, query)
+        }
+        LoadBalancerCommand::Show { name, resource_group } => {
+            let value = commands::network::lb::show::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format, query)
+        }
+        LoadBalancerCommand::ListMapping { name, resource_group } => {
+            let value = commands::network::lb::list_mapping::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format, query)
+        }
+        LoadBalancerCommand::ListNic { name, resource_group } => {
+            let value = commands::network::lb::list_nic::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format, query)
+        }
+        LoadBalancerCommand::AddressPool { command } => {
+            match command {
+                LoadBalancerAddressPoolCommand::List { lb_name, resource_group } => {
+                    let value = commands::network::lb::address_pool_list::execute(&client, &resource_group, &lb_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+                LoadBalancerAddressPoolCommand::Show { name, lb_name, resource_group } => {
+                    let value = commands::network::lb::address_pool_show::execute(&client, &resource_group, &lb_name, &name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+        LoadBalancerCommand::FrontendIp { command } => {
+            match command {
+                LoadBalancerFrontendIpCommand::List { lb_name, resource_group } => {
+                    let value = commands::network::lb::frontend_ip_list::execute(&client, &resource_group, &lb_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+                LoadBalancerFrontendIpCommand::Show { name, lb_name, resource_group } => {
+                    let value = commands::network::lb::frontend_ip_show::execute(&client, &resource_group, &lb_name, &name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+        LoadBalancerCommand::InboundNatPool { command } => {
+            match command {
+                LoadBalancerInboundNatPoolCommand::List { lb_name, resource_group } => {
+                    let value = commands::network::lb::inbound_nat_pool_list::execute(&client, &resource_group, &lb_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+                LoadBalancerInboundNatPoolCommand::Show { name, lb_name, resource_group } => {
+                    let value = commands::network::lb::inbound_nat_pool_show::execute(&client, &resource_group, &lb_name, &name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+        LoadBalancerCommand::InboundNatRule { command } => {
+            match command {
+                LoadBalancerInboundNatRuleCommand::List { lb_name, resource_group } => {
+                    let value = commands::network::lb::inbound_nat_rule_list::execute(&client, &resource_group, &lb_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+                LoadBalancerInboundNatRuleCommand::Show { name, lb_name, resource_group } => {
+                    let value = commands::network::lb::inbound_nat_rule_show::execute(&client, &resource_group, &lb_name, &name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+        LoadBalancerCommand::OutboundRule { command } => {
+            match command {
+                LoadBalancerOutboundRuleCommand::List { lb_name, resource_group } => {
+                    let value = commands::network::lb::outbound_rule_list::execute(&client, &resource_group, &lb_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+                LoadBalancerOutboundRuleCommand::Show { name, lb_name, resource_group } => {
+                    let value = commands::network::lb::outbound_rule_show::execute(&client, &resource_group, &lb_name, &name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+        LoadBalancerCommand::Probe { command } => {
+            match command {
+                LoadBalancerProbeCommand::List { lb_name, resource_group } => {
+                    let value = commands::network::lb::probe_list::execute(&client, &resource_group, &lb_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+                LoadBalancerProbeCommand::Show { name, lb_name, resource_group } => {
+                    let value = commands::network::lb::probe_show::execute(&client, &resource_group, &lb_name, &name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+        LoadBalancerCommand::Rule { command } => {
+            match command {
+                LoadBalancerRuleCommand::List { lb_name, resource_group } => {
+                    let value = commands::network::lb::rule_list::execute(&client, &resource_group, &lb_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+                LoadBalancerRuleCommand::Show { name, lb_name, resource_group } => {
+                    let value = commands::network::lb::rule_show::execute(&client, &resource_group, &lb_name, &name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+    }
+}
+

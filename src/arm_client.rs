@@ -1754,6 +1754,156 @@ impl ArmClient {
         );
         self.arm_get(url, "get private endpoint").await
     }
+
+    pub async fn list_load_balancers(&self, resource_group: Option<&str>) -> Result<serde_json::Value> {
+        let url = match resource_group {
+            Some(rg) => format!(
+                "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/loadBalancers?api-version={}",
+                self.subscription_id, rg, NETWORK_API_VERSION
+            ),
+            None => format!(
+                "https://management.azure.com/subscriptions/{}/providers/Microsoft.Network/loadBalancers?api-version={}",
+                self.subscription_id, NETWORK_API_VERSION
+            ),
+        };
+        self.arm_get_paginated(url, "list load balancers").await
+    }
+
+    pub async fn show_load_balancer(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/loadBalancers/{}?api-version={}",
+            self.subscription_id, resource_group, name, NETWORK_API_VERSION
+        );
+        self.arm_get(url, "get load balancer").await
+    }
+
+    pub async fn list_load_balancer_inbound_nat_rule_port_mappings(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/loadBalancers/{}/inboundNatRulePortMappings?api-version={}",
+            self.subscription_id, resource_group, name, NETWORK_API_VERSION
+        );
+        self.arm_get_paginated(url, "list load balancer inbound NAT rule port mappings").await
+    }
+
+    pub async fn list_load_balancer_network_interfaces(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/loadBalancers/{}/networkInterfaces?api-version={}",
+            self.subscription_id, resource_group, name, NETWORK_API_VERSION
+        );
+        self.arm_get_paginated(url, "list load balancer network interfaces").await
+    }
+
+    pub async fn list_load_balancer_backend_address_pools(&self, resource_group: &str, lb_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/loadBalancers/{}/backendAddressPools?api-version={}",
+            self.subscription_id, resource_group, lb_name, NETWORK_API_VERSION
+        );
+        self.arm_get_paginated(url, "list load balancer backend address pools").await
+    }
+
+    pub async fn show_load_balancer_backend_address_pool(&self, resource_group: &str, lb_name: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/loadBalancers/{}/backendAddressPools/{}?api-version={}",
+            self.subscription_id, resource_group, lb_name, name, NETWORK_API_VERSION
+        );
+        self.arm_get(url, "get load balancer backend address pool").await
+    }
+
+    pub async fn list_load_balancer_frontend_ip_configurations(&self, resource_group: &str, lb_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/loadBalancers/{}/frontendIPConfigurations?api-version={}",
+            self.subscription_id, resource_group, lb_name, NETWORK_API_VERSION
+        );
+        self.arm_get_paginated(url, "list load balancer frontend IP configurations").await
+    }
+
+    pub async fn show_load_balancer_frontend_ip_configuration(&self, resource_group: &str, lb_name: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/loadBalancers/{}/frontendIPConfigurations/{}?api-version={}",
+            self.subscription_id, resource_group, lb_name, name, NETWORK_API_VERSION
+        );
+        self.arm_get(url, "get load balancer frontend IP configuration").await
+    }
+
+    pub async fn list_load_balancer_inbound_nat_pools(&self, resource_group: &str, lb_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/loadBalancers/{}/inboundNatPools?api-version={}",
+            self.subscription_id, resource_group, lb_name, NETWORK_API_VERSION
+        );
+        self.arm_get_paginated(url, "list load balancer inbound NAT pools").await
+    }
+
+    pub async fn show_load_balancer_inbound_nat_pool(&self, resource_group: &str, lb_name: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/loadBalancers/{}/inboundNatPools/{}?api-version={}",
+            self.subscription_id, resource_group, lb_name, name, NETWORK_API_VERSION
+        );
+        self.arm_get(url, "get load balancer inbound NAT pool").await
+    }
+
+    pub async fn list_load_balancer_inbound_nat_rules(&self, resource_group: &str, lb_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/loadBalancers/{}/inboundNatRules?api-version={}",
+            self.subscription_id, resource_group, lb_name, NETWORK_API_VERSION
+        );
+        self.arm_get_paginated(url, "list load balancer inbound NAT rules").await
+    }
+
+    pub async fn show_load_balancer_inbound_nat_rule(&self, resource_group: &str, lb_name: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/loadBalancers/{}/inboundNatRules/{}?api-version={}",
+            self.subscription_id, resource_group, lb_name, name, NETWORK_API_VERSION
+        );
+        self.arm_get(url, "get load balancer inbound NAT rule").await
+    }
+
+    pub async fn list_load_balancer_outbound_rules(&self, resource_group: &str, lb_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/loadBalancers/{}/outboundRules?api-version={}",
+            self.subscription_id, resource_group, lb_name, NETWORK_API_VERSION
+        );
+        self.arm_get_paginated(url, "list load balancer outbound rules").await
+    }
+
+    pub async fn show_load_balancer_outbound_rule(&self, resource_group: &str, lb_name: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/loadBalancers/{}/outboundRules/{}?api-version={}",
+            self.subscription_id, resource_group, lb_name, name, NETWORK_API_VERSION
+        );
+        self.arm_get(url, "get load balancer outbound rule").await
+    }
+
+    pub async fn list_load_balancer_probes(&self, resource_group: &str, lb_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/loadBalancers/{}/probes?api-version={}",
+            self.subscription_id, resource_group, lb_name, NETWORK_API_VERSION
+        );
+        self.arm_get_paginated(url, "list load balancer probes").await
+    }
+
+    pub async fn show_load_balancer_probe(&self, resource_group: &str, lb_name: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/loadBalancers/{}/probes/{}?api-version={}",
+            self.subscription_id, resource_group, lb_name, name, NETWORK_API_VERSION
+        );
+        self.arm_get(url, "get load balancer probe").await
+    }
+
+    pub async fn list_load_balancer_rules(&self, resource_group: &str, lb_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/loadBalancers/{}/loadBalancingRules?api-version={}",
+            self.subscription_id, resource_group, lb_name, NETWORK_API_VERSION
+        );
+        self.arm_get_paginated(url, "list load balancer rules").await
+    }
+
+    pub async fn show_load_balancer_rule(&self, resource_group: &str, lb_name: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/loadBalancers/{}/loadBalancingRules/{}?api-version={}",
+            self.subscription_id, resource_group, lb_name, name, NETWORK_API_VERSION
+        );
+        self.arm_get(url, "get load balancer rule").await
+    }
 }
 
 fn urlencode(s: &str) -> String {
