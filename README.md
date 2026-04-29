@@ -34,7 +34,7 @@ azcli group list -o table
 | [`vmss`](docs/virtual-machine-scale-sets.md) | Partial | 11 | Core commands. Subgroups not yet implemented |
 | [`deployment`](docs/deployments.md) | Full | 44 | All four ARM scopes (group, sub, mg, tenant) + operations |
 | [`network bastion`](docs/bastion.md) | Full | 9 | SSH, RDP, tunnel with custom WebSocket implementation |
-| [`network vnet` / `nsg` / `public-ip` / `nic` / `private-endpoint`](docs/network.md) | Read | 18 | Vnets (+subnets, peerings), NSGs (+rules), public IPs, NICs (+ip-configs), private endpoints |
+| [`network vnet` / `nsg` / `public-ip` / `nic` / `private-endpoint` / `lb` / `route-table`](docs/network.md) | Read | 28 | Vnets (+subnets, peerings), NSGs (+rules), public IPs, NICs (+ip-configs), private endpoints |
 | [`role assignment`](docs/role.md#role-assignment) | Read | 2 | List, show |
 | [`role definition`](docs/role.md#role-definition) | Read | 2 | List, show |
 | [`role pim`](docs/pim.md) | **NEW** | 4 | List, status, activate, deactivate PIM role assignments |
