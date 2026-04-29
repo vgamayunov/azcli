@@ -16,6 +16,8 @@ const RESOURCE_SKU_API_VERSION: &str = "2021-07-01";
 const PIM_API_VERSION: &str = "2020-10-01";
 const ROLE_DEFINITION_API_VERSION: &str = "2022-04-01";
 const ROLE_ASSIGNMENT_API_VERSION: &str = "2022-04-01";
+const IMAGE_API_VERSION: &str = "2024-07-01";
+const IMAGE_BUILDER_API_VERSION: &str = "2022-07-01";
 
 #[derive(Clone)]
 pub struct ArmClient {
@@ -955,6 +957,114 @@ impl ArmClient {
             anyhow::bail!("List disk SKUs failed ({status}): {body}");
         }
         resp.json().await.context("Failed to parse disk SKUs")
+    }
+
+    pub async fn list_images(&self, resource_group: Option<&str>) -> Result<serde_json::Value> {
+        let url = match resource_group {
+            Some(rg) => format!(
+                "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/images?api-version={}",
+                self.subscription_id, rg, IMAGE_API_VERSION
+            ),
+            None => format!(
+                "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/images?api-version={}",
+                self.subscription_id, IMAGE_API_VERSION
+            ),
+        };
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to list images")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("List images failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse images list")
+    }
+
+    pub async fn show_image(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/images/{}?api-version={}",
+            self.subscription_id, resource_group, name, IMAGE_API_VERSION
+        );
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to get image")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Get image failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse image response")
+    }
+
+    pub async fn list_image_templates(&self, resource_group: Option<&str>) -> Result<serde_json::Value> {
+        let url = match resource_group {
+            Some(rg) => format!(
+                "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.VirtualMachineImages/imageTemplates?api-version={}",
+                self.subscription_id, rg, IMAGE_BUILDER_API_VERSION
+            ),
+            None => format!(
+                "https://management.azure.com/subscriptions/{}/providers/Microsoft.VirtualMachineImages/imageTemplates?api-version={}",
+                self.subscription_id, IMAGE_BUILDER_API_VERSION
+            ),
+        };
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to list image templates")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("List image templates failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse image templates list")
+    }
+
+    pub async fn show_image_template(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.VirtualMachineImages/imageTemplates/{}?api-version={}",
+            self.subscription_id, resource_group, name, IMAGE_BUILDER_API_VERSION
+        );
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to get image template")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Get image template failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse image template response")
+    }
+
+    pub async fn list_image_template_run_outputs(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.VirtualMachineImages/imageTemplates/{}/runOutputs?api-version={}",
+            self.subscription_id, resource_group, name, IMAGE_BUILDER_API_VERSION
+        );
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to list image template run outputs")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("List image template run outputs failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse run outputs list")
+    }
+
+    pub async fn show_image_template_run_output(&self, resource_group: &str, name: &str, output_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.VirtualMachineImages/imageTemplates/{}/runOutputs/{}?api-version={}",
+            self.subscription_id, resource_group, name, output_name, IMAGE_BUILDER_API_VERSION
+        );
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .context("Failed to get image template run output")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Get run output failed ({status}): {body}");
+        }
+        resp.json().await.context("Failed to parse run output response")
     }
 
     pub async fn create_disk(&self, resource_group: &str, name: &str, body: serde_json::Value) -> Result<serde_json::Value> {

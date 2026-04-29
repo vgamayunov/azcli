@@ -4,6 +4,7 @@ pub mod delete;
 pub mod deployment;
 pub mod disk;
 pub mod group;
+pub mod image;
 pub mod list;
 pub mod rdp;
 pub mod rest;

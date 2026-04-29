@@ -243,6 +243,27 @@ fn pick_table_columns(sample: &serde_json::Value) -> Vec<String> {
         ];
     }
 
+    if let Some(t) = obj.get("type").and_then(|v| v.as_str()) {
+        if t.eq_ignore_ascii_case("Microsoft.Compute/images") {
+            return vec![
+                "name".to_string(),
+                "@resourceGroup".to_string(),
+                "location".to_string(),
+                "properties.hyperVGeneration".to_string(),
+                "properties.provisioningState".to_string(),
+            ];
+        }
+        if t.eq_ignore_ascii_case("Microsoft.VirtualMachineImages/imageTemplates") {
+            return vec![
+                "name".to_string(),
+                "@resourceGroup".to_string(),
+                "location".to_string(),
+                "properties.provisioningState".to_string(),
+                "properties.lastRunStatus.runState".to_string(),
+            ];
+        }
+    }
+
     let preferred = [
         "name",
         "location",
@@ -297,6 +318,7 @@ fn extract_field(item: &serde_json::Value, path: &str) -> String {
             .unwrap_or_default(),
         "@restrictions" => summarize_restrictions(item.get("restrictions")),
         "@scopeShort" => short_scope(item.get("scope").and_then(|v| v.as_str()).unwrap_or("")),
+        "@resourceGroup" => extract_resource_group(item),
         _ => match resolve_path(item, path) {
             Some(serde_json::Value::String(s)) => s.clone(),
             Some(serde_json::Value::Null) => String::new(),
@@ -316,6 +338,24 @@ fn join_string_array(value: Option<&serde_json::Value>) -> String {
     let mut parts: Vec<&str> = arr.iter().filter_map(|v| v.as_str()).collect();
     parts.sort_unstable();
     parts.join(",")
+}
+
+fn extract_resource_group(item: &serde_json::Value) -> String {
+    if let Some(rg) = item.get("resourceGroup").and_then(|v| v.as_str()) {
+        return rg.to_string();
+    }
+    let id = match item.get("id").and_then(|v| v.as_str()) {
+        Some(s) => s,
+        None => return String::new(),
+    };
+    let lower = id.to_ascii_lowercase();
+    let needle = "/resourcegroups/";
+    let start = match lower.find(needle) {
+        Some(i) => i + needle.len(),
+        None => return String::new(),
+    };
+    let rest = &id[start..];
+    rest.split('/').next().unwrap_or("").to_string()
 }
 
 fn summarize_restrictions(value: Option<&serde_json::Value>) -> String {
@@ -360,6 +400,7 @@ fn display_name(path: &str) -> &str {
         "@zones" => "Zones",
         "@restrictions" => "Restrictions",
         "@scopeShort" => "Scope",
+        "@resourceGroup" => "ResourceGroup",
         "roleName" => "Role",
         "state" => "State",
         "assignmentType" => "Type",

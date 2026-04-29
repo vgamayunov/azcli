@@ -81,6 +81,11 @@ enum CliCommand {
         command: DiskCommand,
     },
 
+    Image {
+        #[command(subcommand)]
+        command: ImageCommand,
+    },
+
     Deployment {
         #[command(subcommand)]
         command: DeploymentCommand,
@@ -789,6 +794,47 @@ enum DiskCommand {
         name: String,
         #[arg(short = 'g', long)]
         resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ImageCommand {
+    List {
+        #[arg(short = 'g', long)]
+        resource_group: Option<String>,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+    Builder {
+        #[command(subcommand)]
+        command: ImageBuilderCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum ImageBuilderCommand {
+    List {
+        #[arg(short = 'g', long)]
+        resource_group: Option<String>,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+    #[command(name = "show-runs")]
+    ShowRuns {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+        #[arg(long = "output-name")]
+        output_name: Option<String>,
     },
 }
 
@@ -1637,6 +1683,10 @@ async fn main() -> anyhow::Result<()> {
             handle_disk(command, output_format, subscription).await
         }
 
+        CliCommand::Image { command } => {
+            handle_image(command, output_format, subscription).await
+        }
+
         CliCommand::Deployment { command } => {
             handle_deployment(command, output_format, subscription).await
         }
@@ -2109,6 +2159,53 @@ async fn handle_disk(
         DiskCommand::RevokeAccess { name, resource_group } => {
             commands::disk::revoke_access::execute(&client, &resource_group, &name).await
         }
+    }
+}
+
+async fn handle_image(
+    cmd: ImageCommand,
+    output_format: OutputFormat,
+    subscription: Option<String>,
+) -> anyhow::Result<()> {
+    let mut provider = auth::TokenProvider::load(subscription)?;
+    let access_token = provider.get_access_token().await?;
+    let subscription_id = provider.get_subscription_id_or_fallback().await?;
+
+    let client = arm_client::ArmClient::new(access_token, subscription_id);
+
+    match cmd {
+        ImageCommand::List { resource_group } => {
+            let value = commands::image::list::execute(&client, resource_group.as_deref()).await?;
+            output::print_output(&value, output_format)
+        }
+        ImageCommand::Show { name, resource_group } => {
+            let value = commands::image::show::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format)
+        }
+        ImageCommand::Builder { command } => match command {
+            ImageBuilderCommand::List { resource_group } => {
+                let value =
+                    commands::image::builder::list::execute(&client, resource_group.as_deref())
+                        .await?;
+                output::print_output(&value, output_format)
+            }
+            ImageBuilderCommand::Show { name, resource_group } => {
+                let value =
+                    commands::image::builder::show::execute(&client, &resource_group, &name)
+                        .await?;
+                output::print_output(&value, output_format)
+            }
+            ImageBuilderCommand::ShowRuns { name, resource_group, output_name } => {
+                let value = commands::image::builder::show_runs::execute(
+                    &client,
+                    &resource_group,
+                    &name,
+                    output_name.as_deref(),
+                )
+                .await?;
+                output::print_output(&value, output_format)
+            }
+        },
     }
 }
 
