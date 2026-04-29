@@ -59,6 +59,27 @@ All commands support `-o/--output` with formats matching `az` CLI:
 |------|-------------|
 | `-o, --output` | Output format |
 | `--subscription` | Override subscription ID |
+| `--query` | JMESPath query string applied to the result before formatting (matches `az --query`) |
+
+### `--query` examples
+
+```bash
+# Project specific fields and rename them
+azcli vm list -g my-rg --query "[].{name:name, size:hardwareProfile.vmSize}" -o table
+
+# Filter with starts_with
+azcli vm list -g my-rg --query "[?starts_with(name,'web')].name" -o tsv
+
+# Pipe + first element
+azcli vmss list-instances -g my-rg -n my-vmss \
+  --query "[].{id:instanceId, state:instanceView.statuses[?starts_with(code,'PowerState/')].displayStatus | [0]}" \
+  -o table
+
+# Scalars and aggregates
+azcli account list-locations --query "length([?metadata.regionType=='Physical'])"
+```
+
+JMESPath 1.0 spec, dialect-compatible with the Python `jmespath` library used by `az`.
 
 ## Debug Logging
 

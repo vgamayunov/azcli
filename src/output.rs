@@ -1,16 +1,32 @@
 use std::io::{self, Write};
 
+use anyhow::Context;
+
 use crate::models::OutputFormat;
 
-pub fn print_output(value: &serde_json::Value, format: OutputFormat) -> anyhow::Result<()> {
+pub fn print_output(value: &serde_json::Value, format: OutputFormat, query: Option<&str>) -> anyhow::Result<()> {
+    let queried = match query {
+        Some(q) => apply_query(value, q)?,
+        None => value.clone(),
+    };
+    let value = &queried;
     match format {
         OutputFormat::None => Ok(()),
         OutputFormat::Json => print_json(value),
         OutputFormat::Jsonc => print_jsonc(value),
-        OutputFormat::Table => print_table(value),
-        OutputFormat::Tsv => print_tsv(value),
+        OutputFormat::Table => print_table(value, query.is_some()),
+        OutputFormat::Tsv => print_tsv(value, query.is_some()),
         OutputFormat::Yaml | OutputFormat::Yamlc => print_yaml(value),
     }
+}
+
+fn apply_query(value: &serde_json::Value, query: &str) -> anyhow::Result<serde_json::Value> {
+    let expr = jmespath::compile(query)
+        .with_context(|| format!("Invalid jmespath query supplied for `--query`: {query}"))?;
+    let result = expr
+        .search(value)
+        .with_context(|| format!("Invalid jmespath query supplied for `--query`: {query}"))?;
+    serde_json::to_value(&*result).context("Failed to serialize JMESPath query result")
 }
 
 fn print_json(value: &serde_json::Value) -> anyhow::Result<()> {
@@ -113,14 +129,18 @@ fn print_yaml(value: &serde_json::Value) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn print_table(value: &serde_json::Value) -> anyhow::Result<()> {
+fn print_table(value: &serde_json::Value, from_query: bool) -> anyhow::Result<()> {
     let items = unwrap_items(value);
 
     if items.is_empty() {
         return Ok(());
     }
 
-    let columns = pick_table_columns(&items[0]);
+    let columns = if from_query {
+        all_keys(&items[0])
+    } else {
+        pick_table_columns(&items[0])
+    };
 
     if columns.is_empty() {
         return print_json(value);
@@ -168,6 +188,20 @@ fn print_table(value: &serde_json::Value) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn all_keys(sample: &serde_json::Value) -> Vec<String> {
+    sample.as_object().map(|o| o.keys().cloned().collect()).unwrap_or_default()
+}
+
+fn scalar_to_string(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::String(s) => Some(s.clone()),
+        serde_json::Value::Number(n) => Some(n.to_string()),
+        serde_json::Value::Bool(b) => Some(b.to_string()),
+        serde_json::Value::Null => Some(String::new()),
+        _ => None,
+    }
 }
 
 fn pick_table_columns(sample: &serde_json::Value) -> Vec<String> {
@@ -587,14 +621,35 @@ fn display_name(path: &str) -> &str {
     }
 }
 
-fn print_tsv(value: &serde_json::Value) -> anyhow::Result<()> {
+fn print_tsv(value: &serde_json::Value, from_query: bool) -> anyhow::Result<()> {
+    if from_query {
+        if let Some(s) = scalar_to_string(value) {
+            println!("{s}");
+            return Ok(());
+        }
+        if let Some(arr) = value.as_array() {
+            if arr.iter().all(|v| !v.is_object()) {
+                let stdout = io::stdout();
+                let mut out = stdout.lock();
+                for v in arr {
+                    writeln!(out, "{}", scalar_to_string(v).unwrap_or_default())?;
+                }
+                return Ok(());
+            }
+        }
+    }
+
     let items = unwrap_items(value);
 
     if items.is_empty() {
         return Ok(());
     }
 
-    let columns = pick_table_columns(&items[0]);
+    let columns = if from_query {
+        all_keys(&items[0])
+    } else {
+        pick_table_columns(&items[0])
+    };
 
     let stdout = io::stdout();
     let mut out = stdout.lock();

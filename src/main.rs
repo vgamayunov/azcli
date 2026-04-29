@@ -23,6 +23,9 @@ struct Cli {
     #[arg(long = "subscription", global = true)]
     subscription: Option<String>,
 
+    #[arg(long = "query", global = true)]
+    query: Option<String>,
+
     #[command(subcommand)]
     command: CliCommand,
 }
@@ -1926,6 +1929,7 @@ async fn main() -> anyhow::Result<()> {
 
     let output_format = cli.output;
     let subscription = cli.subscription;
+    let query = cli.query;
 
     match cli.command {
         CliCommand::Login {
@@ -1973,17 +1977,17 @@ async fn main() -> anyhow::Result<()> {
             AccountCommand::Show { name } => {
                 let provider = auth::TokenProvider::load(subscription)?;
                 let value = commands::account::show::execute(&provider, name.as_deref())?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query.as_deref())
             }
             AccountCommand::List => {
                 let mut provider = auth::TokenProvider::load(subscription)?;
                 let value = commands::account::list::execute(&mut provider).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query.as_deref())
             }
             AccountCommand::Set { name } => {
                 let mut provider = auth::TokenProvider::load(subscription)?;
                 let value = commands::account::set::execute(&mut provider, &name).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query.as_deref())
             }
             AccountCommand::ListLocations { subscription_id } => {
                 let mut provider = auth::TokenProvider::load(subscription.clone())?;
@@ -1994,71 +1998,71 @@ async fn main() -> anyhow::Result<()> {
                     .ok_or_else(|| anyhow::anyhow!("no subscription specified and no default in cache"))?;
                 let client = arm_client::ArmClient::new(token, sub.clone());
                 let value = commands::account::list_locations::execute(&client, Some(&sub)).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query.as_deref())
             }
             AccountCommand::GetAccessToken => {
                 let mut provider = auth::TokenProvider::load(subscription)?;
                 let value = commands::account::get_access_token::execute(&mut provider).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query.as_deref())
             }
             AccountCommand::Clear => {
                 let mut provider = auth::TokenProvider::load(subscription)?;
                 let value = commands::account::clear::execute(&mut provider)?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query.as_deref())
             }
         },
 
         CliCommand::Role { command } => {
-            handle_role(command, output_format, subscription).await
+            handle_role(command, output_format, subscription, query.as_deref()).await
         }
 
         CliCommand::Group { command } => {
-            handle_group(command, output_format, subscription).await
+            handle_group(command, output_format, subscription, query.as_deref()).await
         }
 
         CliCommand::Vm { command } => {
-            handle_vm(command, output_format, subscription).await
+            handle_vm(command, output_format, subscription, query.as_deref()).await
         }
 
         CliCommand::Vmss { command } => {
-            handle_vmss(command, output_format, subscription).await
+            handle_vmss(command, output_format, subscription, query.as_deref()).await
         }
 
         CliCommand::Disk { command } => {
-            handle_disk(command, output_format, subscription).await
+            handle_disk(command, output_format, subscription, query.as_deref()).await
         }
 
         CliCommand::Image { command } => {
-            handle_image(command, output_format, subscription).await
+            handle_image(command, output_format, subscription, query.as_deref()).await
         }
 
         CliCommand::Sig { command } => {
-            handle_sig(command, output_format, subscription).await
+            handle_sig(command, output_format, subscription, query.as_deref()).await
         }
 
         CliCommand::Deployment { command } => {
-            handle_deployment(command, output_format, subscription).await
+            handle_deployment(command, output_format, subscription, query.as_deref()).await
         }
 
         CliCommand::Network { command } => match command {
             NetworkCommand::Bastion { command } => {
-                handle_bastion(command, output_format, subscription).await?;
+                handle_bastion(command, output_format, subscription, query.as_deref()).await?;
                 Ok(())
             }
             NetworkCommand::Vnet { command } => {
-                handle_network_vnet(command, output_format, subscription).await
+                handle_network_vnet(command, output_format, subscription, query.as_deref()).await
             }
             NetworkCommand::Nsg { command } => {
-                handle_network_nsg(command, output_format, subscription).await
+                handle_network_nsg(command, output_format, subscription, query.as_deref()).await
             }
             NetworkCommand::PublicIp { command } => {
-                handle_network_public_ip(command, output_format, subscription).await
+                handle_network_public_ip(command, output_format, subscription, query.as_deref()).await
             }
             NetworkCommand::Nic { command } => {
-                handle_network_nic(command, output_format, subscription).await
+                handle_network_nic(command, output_format, subscription, query.as_deref()).await
             }
             NetworkCommand::PrivateEndpoint { command } => {
-                handle_network_private_endpoint(command, output_format, subscription).await
+                handle_network_private_endpoint(command, output_format, subscription, query.as_deref()).await
             }
         },
 
@@ -2101,7 +2105,7 @@ async fn main() -> anyhow::Result<()> {
                 eprintln!("Response saved to {path}");
                 Ok(())
             } else {
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query.as_deref())
             }
         }
     }
@@ -2111,6 +2115,7 @@ async fn handle_group(
     cmd: GroupCommand,
     output_format: OutputFormat,
     subscription: Option<String>,
+    query: Option<&str>,
 ) -> anyhow::Result<()> {
     let mut provider = auth::TokenProvider::load(subscription)?;
     let access_token = provider.get_access_token().await?;
@@ -2121,11 +2126,11 @@ async fn handle_group(
     match cmd {
         GroupCommand::List => {
             let value = commands::group::list::execute(&client).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         GroupCommand::Show { name } => {
             let value = commands::group::show::execute(&client, &name).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
     }
 }
@@ -2134,6 +2139,7 @@ async fn handle_vm(
     cmd: VmCommand,
     output_format: OutputFormat,
     subscription: Option<String>,
+    query: Option<&str>,
 ) -> anyhow::Result<()> {
     let mut provider = auth::TokenProvider::load(subscription)?;
     let access_token = provider.get_access_token().await?;
@@ -2144,11 +2150,11 @@ async fn handle_vm(
     match cmd {
         VmCommand::List { resource_group } => {
             let value = commands::vm::list::execute(&client, resource_group.as_deref()).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         VmCommand::Show { name, resource_group } => {
             let value = commands::vm::show::execute(&client, &resource_group, &name).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         VmCommand::Start { name, resource_group } => {
             commands::vm::start::execute(&client, &resource_group, &name).await
@@ -2161,27 +2167,27 @@ async fn handle_vm(
         }
         VmCommand::GetInstanceView { name, resource_group } => {
             let value = commands::vm::get_instance_view::execute(&client, &resource_group, &name).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         VmCommand::ListIpAddresses { name, resource_group } => {
             let value = commands::vm::list_ip_addresses::execute(&client, resource_group.as_deref(), name.as_deref()).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         VmCommand::ListSizes { location } => {
             let value = commands::vm::list_sizes::execute(&client, &location).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         VmCommand::ListSkus { location, resource_type, size, zone } => {
             let value = commands::vm::list_skus::execute(&client, location.as_deref(), resource_type.as_deref(), size.as_deref(), zone).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         VmCommand::ListUsage { location } => {
             let value = commands::vm::list_usage::execute(&client, &location).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         VmCommand::ListVmResizeOptions { name, resource_group } => {
             let value = commands::vm::list_vm_resize_options::execute(&client, &resource_group, &name).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         VmCommand::Restart { name, resource_group, no_wait } => {
             commands::vm::restart::execute(&client, &resource_group, &name, no_wait).await
@@ -2195,18 +2201,18 @@ async fn handle_vm(
                 ssh_key_value.as_deref(), authentication_type.as_deref(),
                 subnet.as_deref(), os_disk_size_gb, &data_disk_sizes_gb, tags_ref,
             ).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         VmCommand::Delete { name, resource_group, force_deletion, no_wait } => {
             commands::vm::delete_vm::execute(&client, &resource_group, &name, force_deletion, no_wait).await
         }
         VmCommand::Update { name, resource_group, set, no_wait: _ } => {
             let value = commands::vm::update_vm::execute(&client, &resource_group, &name, &set).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         VmCommand::Resize { name, resource_group, size, no_wait: _ } => {
             let value = commands::vm::resize::execute(&client, &resource_group, &name, &size).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         VmCommand::Redeploy { name, resource_group, no_wait } => {
             commands::vm::redeploy::execute(&client, &resource_group, &name, no_wait).await
@@ -2228,86 +2234,86 @@ async fn handle_vm(
         }
         VmCommand::Capture { name, resource_group, vhd_name_prefix, storage_container, overwrite } => {
             let value = commands::vm::capture::execute(&client, &resource_group, &name, &vhd_name_prefix, &storage_container, overwrite).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         VmCommand::Convert { name, resource_group } => {
             commands::vm::convert::execute(&client, &resource_group, &name).await
         }
         VmCommand::AssessPatches { name, resource_group } => {
             let value = commands::vm::assess_patches::execute(&client, &resource_group, &name).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         VmCommand::InstallPatches { name, resource_group, maximum_duration, reboot_setting, classifications_to_include_linux, classifications_to_include_win } => {
             let linux_cls = if classifications_to_include_linux.is_empty() { None } else { Some(classifications_to_include_linux.as_slice()) };
             let win_cls = if classifications_to_include_win.is_empty() { None } else { Some(classifications_to_include_win.as_slice()) };
             let value = commands::vm::install_patches::execute(&client, &resource_group, &name, &maximum_duration, &reboot_setting, linux_cls, win_cls).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         VmCommand::AutoShutdown { name, resource_group, time, off, email, webhook, location } => {
             let loc = location.as_deref().unwrap_or("eastus");
             let value = commands::vm::auto_shutdown::execute(&client, &resource_group, &name, time.as_deref(), off, email.as_deref(), webhook.as_deref(), loc).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         VmCommand::OpenPort { name, resource_group, port, priority, nsg_name, apply_to_subnet } => {
             let value = commands::vm::open_port::execute(&client, &resource_group, &name, &port, priority, nsg_name.as_deref(), apply_to_subnet).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         VmCommand::Disk { command } => match command {
             VmDiskCommand::Attach { vm_name, resource_group, name, new, size_gb, sku, lun, caching, enable_write_accelerator } => {
                 let value = commands::vm::disk::attach::execute(&client, &resource_group, &vm_name, &name, new, size_gb, sku.as_deref(), lun, caching.as_deref(), enable_write_accelerator).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             VmDiskCommand::Detach { vm_name, resource_group, name, force_detach } => {
                 let value = commands::vm::disk::detach::execute(&client, &resource_group, &vm_name, &name, force_detach).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
         },
         VmCommand::Nic { command } => match command {
             VmNicCommand::List { vm_name, resource_group } => {
                 let value = commands::vm::nic::list::execute(&client, &resource_group, &vm_name).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             VmNicCommand::Show { vm_name, resource_group, nic } => {
                 let value = commands::vm::nic::show::execute(&client, &resource_group, &vm_name, &nic).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             VmNicCommand::Add { vm_name, resource_group, nics, primary_nic } => {
                 let value = commands::vm::nic::add::execute(&client, &resource_group, &vm_name, &nics, primary_nic.as_deref()).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             VmNicCommand::Remove { vm_name, resource_group, nics, primary_nic } => {
                 let value = commands::vm::nic::remove::execute(&client, &resource_group, &vm_name, &nics, primary_nic.as_deref()).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             VmNicCommand::Set { vm_name, resource_group, nics, primary_nic } => {
                 let value = commands::vm::nic::set::execute(&client, &resource_group, &vm_name, &nics, primary_nic.as_deref()).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
         },
         VmCommand::RunCommand { command } => match command {
             VmRunCommandCommand::Invoke { vm_name, resource_group, command_id, scripts, parameters } => {
                 let value = commands::vm::run_command::invoke::execute(&client, &resource_group, &vm_name, &command_id, &scripts, &parameters).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             VmRunCommandCommand::List { vm_name, resource_group, location, expand_instance_view } => {
                 let value = commands::vm::run_command::list::execute(&client, resource_group.as_deref(), vm_name.as_deref(), location.as_deref(), expand_instance_view).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             VmRunCommandCommand::Show { vm_name, resource_group, name, location, command_id, instance_view } => {
                 let value = commands::vm::run_command::show::execute(&client, resource_group.as_deref(), vm_name.as_deref(), name.as_deref(), location.as_deref(), command_id.as_deref(), instance_view).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             VmRunCommandCommand::Create { vm_name, resource_group, name, location, script, script_uri, command_id, parameters, protected_parameters, run_as_user, run_as_password, async_execution, timeout_in_seconds, output_blob_uri, error_blob_uri } => {
                 let value = commands::vm::run_command::create::execute(&client, &resource_group, &vm_name, &name, location.as_deref(), script.as_deref(), script_uri.as_deref(), command_id.as_deref(), &parameters, &protected_parameters, run_as_user.as_deref(), run_as_password.as_deref(), async_execution, timeout_in_seconds, output_blob_uri.as_deref(), error_blob_uri.as_deref()).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             VmRunCommandCommand::Update { vm_name, resource_group, name, script, script_uri, command_id, parameters, protected_parameters, run_as_user, run_as_password, timeout_in_seconds, output_blob_uri, error_blob_uri } => {
                 let value = commands::vm::run_command::update::execute(&client, &resource_group, &vm_name, &name, script.as_deref(), script_uri.as_deref(), command_id.as_deref(), &parameters, &protected_parameters, run_as_user.as_deref(), run_as_password.as_deref(), timeout_in_seconds, output_blob_uri.as_deref(), error_blob_uri.as_deref()).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             VmRunCommandCommand::Delete { vm_name, resource_group, name } => {
                 let value = commands::vm::run_command::delete::execute(&client, &resource_group, &vm_name, &name).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
         },
         VmCommand::Wait { name, resource_group, created, updated, deleted, exists, interval, timeout } => {
@@ -2320,6 +2326,7 @@ async fn handle_vmss(
     cmd: VmssCommand,
     output_format: OutputFormat,
     subscription: Option<String>,
+    query: Option<&str>,
 ) -> anyhow::Result<()> {
     let mut provider = auth::TokenProvider::load(subscription)?;
     let access_token = provider.get_access_token().await?;
@@ -2330,27 +2337,27 @@ async fn handle_vmss(
     match cmd {
         VmssCommand::List { resource_group } => {
             let value = commands::vmss::list::execute(&client, resource_group.as_deref()).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         VmssCommand::Show { name, resource_group } => {
             let value = commands::vmss::show::execute(&client, &resource_group, &name).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         VmssCommand::ListInstances { name, resource_group, expand } => {
             let value = commands::vmss::list_instances::execute(&client, &resource_group, &name, expand.as_deref()).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         VmssCommand::ListSkus { name, resource_group } => {
             let value = commands::vmss::list_skus::execute(&client, &resource_group, &name).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         VmssCommand::ListInstancePublicIps { name, resource_group } => {
             let value = commands::vmss::list_instance_public_ips::execute(&client, &resource_group, &name).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         VmssCommand::ListInstanceConnectionInfo { name, resource_group } => {
             let value = commands::vmss::list_instance_connection_info::execute(&client, &resource_group, &name).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         VmssCommand::Scale { name, resource_group, new_capacity } => {
             commands::vmss::scale::execute(&client, &resource_group, &name, new_capacity).await
@@ -2374,6 +2381,7 @@ async fn handle_role(
     cmd: RoleCommand,
     output_format: OutputFormat,
     subscription: Option<String>,
+    query: Option<&str>,
 ) -> anyhow::Result<()> {
     let mut provider = auth::TokenProvider::load(subscription.clone())?;
     let access_token = provider.get_access_token().await?;
@@ -2394,7 +2402,7 @@ async fn handle_role(
                     all,
                 )
                 .await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             RoleAssignmentCommand::Show { ids, name, scope } => {
                 let value = commands::role::assignment::show::execute(
@@ -2405,7 +2413,7 @@ async fn handle_role(
                     subscription.as_deref(),
                 )
                 .await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
         },
         RoleCommand::Definition { command } => match command {
@@ -2418,7 +2426,7 @@ async fn handle_role(
                     custom_role_only,
                 )
                 .await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             RoleDefinitionCommand::Show { name, scope } => {
                 let value = commands::role::definition::show::execute(
@@ -2428,7 +2436,7 @@ async fn handle_role(
                     subscription.as_deref(),
                 )
                 .await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
         },
         RoleCommand::Pim { command } => match command {
@@ -2439,7 +2447,7 @@ async fn handle_role(
                     subscription.as_deref(),
                 )
                 .await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             RolePimCommand::Status { scope } => {
                 let value = commands::role::pim::status::execute(
@@ -2448,7 +2456,7 @@ async fn handle_role(
                     subscription.as_deref(),
                 )
                 .await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             RolePimCommand::Activate { role, justification, duration, scope } => {
                 let value = commands::role::pim::activate::execute(
@@ -2460,7 +2468,7 @@ async fn handle_role(
                     subscription.as_deref(),
                 )
                 .await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             RolePimCommand::Deactivate { role, scope } => {
                 let value = commands::role::pim::deactivate::execute(
@@ -2470,7 +2478,7 @@ async fn handle_role(
                     subscription.as_deref(),
                 )
                 .await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
         },
     }
@@ -2480,6 +2488,7 @@ async fn handle_disk(
     cmd: DiskCommand,
     output_format: OutputFormat,
     subscription: Option<String>,
+    query: Option<&str>,
 ) -> anyhow::Result<()> {
     let mut provider = auth::TokenProvider::load(subscription)?;
     let access_token = provider.get_access_token().await?;
@@ -2490,15 +2499,15 @@ async fn handle_disk(
     match cmd {
         DiskCommand::List { resource_group } => {
             let value = commands::disk::list::execute(&client, resource_group.as_deref()).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         DiskCommand::Show { name, resource_group } => {
             let value = commands::disk::show::execute(&client, &resource_group, &name).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         DiskCommand::ListSkus { location, zone } => {
             let value = commands::disk::list_skus::execute(&client, location.as_deref(), zone).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         DiskCommand::Create { name, resource_group, location, size_gb, sku, source, zone, hyper_v_generation, os_type } => {
             let loc = location.as_deref().unwrap_or("eastus");
@@ -2507,18 +2516,18 @@ async fn handle_disk(
                 size_gb, sku.as_deref(), source.as_deref(),
                 zone.as_deref(), hyper_v_generation.as_deref(), os_type.as_deref(),
             ).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         DiskCommand::Delete { name, resource_group } => {
             commands::disk::delete::execute(&client, &resource_group, &name).await
         }
         DiskCommand::Update { name, resource_group, size_gb, sku } => {
             let value = commands::disk::update::execute(&client, &resource_group, &name, size_gb, sku.as_deref()).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         DiskCommand::GrantAccess { name, resource_group, access_level, duration_in_seconds } => {
             let value = commands::disk::grant_access::execute(&client, &resource_group, &name, &access_level, duration_in_seconds).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         DiskCommand::RevokeAccess { name, resource_group } => {
             commands::disk::revoke_access::execute(&client, &resource_group, &name).await
@@ -2530,6 +2539,7 @@ async fn handle_image(
     cmd: ImageCommand,
     output_format: OutputFormat,
     subscription: Option<String>,
+    query: Option<&str>,
 ) -> anyhow::Result<()> {
     let mut provider = auth::TokenProvider::load(subscription)?;
     let access_token = provider.get_access_token().await?;
@@ -2540,24 +2550,24 @@ async fn handle_image(
     match cmd {
         ImageCommand::List { resource_group } => {
             let value = commands::image::list::execute(&client, resource_group.as_deref()).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         ImageCommand::Show { name, resource_group } => {
             let value = commands::image::show::execute(&client, &resource_group, &name).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         ImageCommand::Builder { command } => match command {
             ImageBuilderCommand::List { resource_group } => {
                 let value =
                     commands::image::builder::list::execute(&client, resource_group.as_deref())
                         .await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             ImageBuilderCommand::Show { name, resource_group } => {
                 let value =
                     commands::image::builder::show::execute(&client, &resource_group, &name)
                         .await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             ImageBuilderCommand::ShowRuns { name, resource_group, output_name } => {
                 let value = commands::image::builder::show_runs::execute(
@@ -2567,7 +2577,7 @@ async fn handle_image(
                     output_name.as_deref(),
                 )
                 .await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
         },
     }
@@ -2577,6 +2587,7 @@ async fn handle_sig(
     cmd: SigCommand,
     output_format: OutputFormat,
     subscription: Option<String>,
+    query: Option<&str>,
 ) -> anyhow::Result<()> {
     let mut provider = auth::TokenProvider::load(subscription)?;
     let access_token = provider.get_access_token().await?;
@@ -2587,79 +2598,79 @@ async fn handle_sig(
     match cmd {
         SigCommand::List { resource_group } => {
             let value = commands::sig::list::execute(&client, resource_group.as_deref()).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         SigCommand::Show { gallery_name, resource_group } => {
             let value = commands::sig::show::execute(&client, &resource_group, &gallery_name).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         SigCommand::ListShared { location, shared_to } => {
             let to_tenant = shared_to.as_deref() == Some("tenant");
             let value = commands::sig::list_shared::execute(&client, &location, to_tenant).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         SigCommand::ShowShared { location, gallery_unique_name } => {
             let value = commands::sig::show_shared::execute(&client, &location, &gallery_unique_name).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         SigCommand::ListCommunity { location } => {
             let value = commands::sig::list_community::execute(&client, location.as_deref()).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         SigCommand::ShowCommunity { location, public_gallery_name } => {
             let value = commands::sig::show_community::execute(&client, &location, &public_gallery_name).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         SigCommand::ImageDefinition { command } => match command {
             SigImageDefinitionCommand::List { resource_group, gallery_name } => {
                 let value = commands::sig::image_definition::list::execute(&client, &resource_group, &gallery_name).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             SigImageDefinitionCommand::Show { resource_group, gallery_name, gallery_image_definition } => {
                 let value = commands::sig::image_definition::show::execute(&client, &resource_group, &gallery_name, &gallery_image_definition).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             SigImageDefinitionCommand::ListShared { location, gallery_unique_name } => {
                 let value = commands::sig::image_definition::list_shared::execute(&client, &location, &gallery_unique_name).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             SigImageDefinitionCommand::ShowShared { location, gallery_unique_name, gallery_image_definition } => {
                 let value = commands::sig::image_definition::show_shared::execute(&client, &location, &gallery_unique_name, &gallery_image_definition).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             SigImageDefinitionCommand::ListCommunity { location, public_gallery_name } => {
                 let value = commands::sig::image_definition::list_community::execute(&client, &location, &public_gallery_name).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             SigImageDefinitionCommand::ShowCommunity { location, public_gallery_name, gallery_image_definition } => {
                 let value = commands::sig::image_definition::show_community::execute(&client, &location, &public_gallery_name, &gallery_image_definition).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
         },
         SigCommand::ImageVersion { command } => match command {
             SigImageVersionCommand::List { resource_group, gallery_name, gallery_image_definition } => {
                 let value = commands::sig::image_version::list::execute(&client, &resource_group, &gallery_name, &gallery_image_definition).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             SigImageVersionCommand::Show { resource_group, gallery_name, gallery_image_definition, gallery_image_version } => {
                 let value = commands::sig::image_version::show::execute(&client, &resource_group, &gallery_name, &gallery_image_definition, &gallery_image_version).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             SigImageVersionCommand::ListShared { location, gallery_unique_name, gallery_image_definition } => {
                 let value = commands::sig::image_version::list_shared::execute(&client, &location, &gallery_unique_name, &gallery_image_definition).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             SigImageVersionCommand::ShowShared { location, gallery_unique_name, gallery_image_definition, gallery_image_version } => {
                 let value = commands::sig::image_version::show_shared::execute(&client, &location, &gallery_unique_name, &gallery_image_definition, &gallery_image_version).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             SigImageVersionCommand::ListCommunity { location, public_gallery_name, gallery_image_definition } => {
                 let value = commands::sig::image_version::list_community::execute(&client, &location, &public_gallery_name, &gallery_image_definition).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             SigImageVersionCommand::ShowCommunity { location, public_gallery_name, gallery_image_definition, gallery_image_version } => {
                 let value = commands::sig::image_version::show_community::execute(&client, &location, &public_gallery_name, &gallery_image_definition, &gallery_image_version).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
         },
     }
@@ -2669,6 +2680,7 @@ async fn handle_deployment(
     cmd: DeploymentCommand,
     output_format: OutputFormat,
     subscription: Option<String>,
+    query: Option<&str>,
 ) -> anyhow::Result<()> {
     let mut provider = auth::TokenProvider::load(subscription)?;
     let access_token = provider.get_access_token().await?;
@@ -2680,15 +2692,15 @@ async fn handle_deployment(
         DeploymentCommand::Group { command } => match command {
             DeploymentGroupCommand::List { resource_group } => {
                 let value = commands::deployment::group::list::execute(&client, &resource_group).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             DeploymentGroupCommand::Show { name, resource_group } => {
                 let value = commands::deployment::group::show::execute(&client, &resource_group, &name).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             DeploymentGroupCommand::Export { name, resource_group } => {
                 let value = commands::deployment::group::export::execute(&client, &resource_group, &name).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             DeploymentGroupCommand::Create { resource_group, name, template_file, template_uri, parameters, mode } => {
                 let value = commands::deployment::group::create::execute(
@@ -2696,7 +2708,7 @@ async fn handle_deployment(
                     template_file.as_deref(), template_uri.as_deref(),
                     parameters.as_deref(), &mode,
                 ).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             DeploymentGroupCommand::Delete { name, resource_group } => {
                 commands::deployment::group::delete::execute(&client, &resource_group, &name).await
@@ -2708,7 +2720,7 @@ async fn handle_deployment(
                     template_file.as_deref(), template_uri.as_deref(),
                     parameters.as_deref(), &mode,
                 ).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             DeploymentGroupCommand::WhatIf { resource_group, name, template_file, template_uri, parameters, mode, result_format } => {
                 let deploy_name = name.unwrap_or_else(|| "what-if".to_string());
@@ -2717,7 +2729,7 @@ async fn handle_deployment(
                     template_file.as_deref(), template_uri.as_deref(),
                     parameters.as_deref(), &mode, Some(&result_format),
                 ).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             DeploymentGroupCommand::Cancel { name, resource_group } => {
                 commands::deployment::group::cancel::execute(&client, &resource_group, &name).await
@@ -2729,15 +2741,15 @@ async fn handle_deployment(
         DeploymentCommand::Sub { command } => match command {
             DeploymentSubCommand::List => {
                 let value = commands::deployment::sub::list::execute(&client).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             DeploymentSubCommand::Show { name } => {
                 let value = commands::deployment::sub::show::execute(&client, &name).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             DeploymentSubCommand::Export { name } => {
                 let value = commands::deployment::sub::export::execute(&client, &name).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             DeploymentSubCommand::Create { name, location, template_file, template_uri, parameters } => {
                 let value = commands::deployment::sub::create::execute(
@@ -2745,7 +2757,7 @@ async fn handle_deployment(
                     template_file.as_deref(), template_uri.as_deref(),
                     parameters.as_deref(),
                 ).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             DeploymentSubCommand::Delete { name } => {
                 commands::deployment::sub::delete::execute(&client, &name).await
@@ -2757,7 +2769,7 @@ async fn handle_deployment(
                     template_file.as_deref(), template_uri.as_deref(),
                     parameters.as_deref(),
                 ).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             DeploymentSubCommand::WhatIf { name, location, template_file, template_uri, parameters, result_format } => {
                 let deploy_name = name.unwrap_or_else(|| "what-if".to_string());
@@ -2766,7 +2778,7 @@ async fn handle_deployment(
                     template_file.as_deref(), template_uri.as_deref(),
                     parameters.as_deref(), Some(&result_format),
                 ).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             DeploymentSubCommand::Cancel { name } => {
                 commands::deployment::sub::cancel::execute(&client, &name).await
@@ -2778,15 +2790,15 @@ async fn handle_deployment(
         DeploymentCommand::Mg { command } => match command {
             DeploymentMgCommand::List { management_group_id } => {
                 let value = commands::deployment::mg::list::execute(&client, &management_group_id).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             DeploymentMgCommand::Show { name, management_group_id } => {
                 let value = commands::deployment::mg::show::execute(&client, &management_group_id, &name).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             DeploymentMgCommand::Export { name, management_group_id } => {
                 let value = commands::deployment::mg::export::execute(&client, &management_group_id, &name).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             DeploymentMgCommand::Create { name, management_group_id, location, template_file, template_uri, parameters } => {
                 let value = commands::deployment::mg::create::execute(
@@ -2794,7 +2806,7 @@ async fn handle_deployment(
                     template_file.as_deref(), template_uri.as_deref(),
                     parameters.as_deref(),
                 ).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             DeploymentMgCommand::Delete { name, management_group_id } => {
                 commands::deployment::mg::delete::execute(&client, &management_group_id, &name).await
@@ -2806,7 +2818,7 @@ async fn handle_deployment(
                     template_file.as_deref(), template_uri.as_deref(),
                     parameters.as_deref(),
                 ).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             DeploymentMgCommand::WhatIf { name, management_group_id, location, template_file, template_uri, parameters, result_format } => {
                 let deploy_name = name.unwrap_or_else(|| "what-if".to_string());
@@ -2815,7 +2827,7 @@ async fn handle_deployment(
                     template_file.as_deref(), template_uri.as_deref(),
                     parameters.as_deref(), Some(&result_format),
                 ).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             DeploymentMgCommand::Cancel { name, management_group_id } => {
                 commands::deployment::mg::cancel::execute(&client, &management_group_id, &name).await
@@ -2827,15 +2839,15 @@ async fn handle_deployment(
         DeploymentCommand::Tenant { command } => match command {
             DeploymentTenantCommand::List => {
                 let value = commands::deployment::tenant::list::execute(&client).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             DeploymentTenantCommand::Show { name } => {
                 let value = commands::deployment::tenant::show::execute(&client, &name).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             DeploymentTenantCommand::Export { name } => {
                 let value = commands::deployment::tenant::export::execute(&client, &name).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             DeploymentTenantCommand::Create { name, location, template_file, template_uri, parameters } => {
                 let value = commands::deployment::tenant::create::execute(
@@ -2843,7 +2855,7 @@ async fn handle_deployment(
                     template_file.as_deref(), template_uri.as_deref(),
                     parameters.as_deref(),
                 ).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             DeploymentTenantCommand::Delete { name } => {
                 commands::deployment::tenant::delete::execute(&client, &name).await
@@ -2855,7 +2867,7 @@ async fn handle_deployment(
                     template_file.as_deref(), template_uri.as_deref(),
                     parameters.as_deref(),
                 ).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             DeploymentTenantCommand::WhatIf { name, location, template_file, template_uri, parameters, result_format } => {
                 let deploy_name = name.unwrap_or_else(|| "what-if".to_string());
@@ -2864,7 +2876,7 @@ async fn handle_deployment(
                     template_file.as_deref(), template_uri.as_deref(),
                     parameters.as_deref(), Some(&result_format),
                 ).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             DeploymentTenantCommand::Cancel { name } => {
                 commands::deployment::tenant::cancel::execute(&client, &name).await
@@ -2877,41 +2889,41 @@ async fn handle_deployment(
             DeploymentOperationCommand::Group { command } => match command {
                 DeploymentOperationGroupCommand::List { name, resource_group } => {
                     let value = commands::deployment::operation::group::list::execute(&client, &resource_group, &name).await?;
-                    output::print_output(&value, output_format)
+                    output::print_output(&value, output_format, query)
                 }
                 DeploymentOperationGroupCommand::Show { name, resource_group, operation_id } => {
                     let value = commands::deployment::operation::group::show::execute(&client, &resource_group, &name, &operation_id).await?;
-                    output::print_output(&value, output_format)
+                    output::print_output(&value, output_format, query)
                 }
             },
             DeploymentOperationCommand::Sub { command } => match command {
                 DeploymentOperationSubCommand::List { name } => {
                     let value = commands::deployment::operation::sub::list::execute(&client, &name).await?;
-                    output::print_output(&value, output_format)
+                    output::print_output(&value, output_format, query)
                 }
                 DeploymentOperationSubCommand::Show { name, operation_id } => {
                     let value = commands::deployment::operation::sub::show::execute(&client, &name, &operation_id).await?;
-                    output::print_output(&value, output_format)
+                    output::print_output(&value, output_format, query)
                 }
             },
             DeploymentOperationCommand::Mg { command } => match command {
                 DeploymentOperationMgCommand::List { name, management_group_id } => {
                     let value = commands::deployment::operation::mg::list::execute(&client, &management_group_id, &name).await?;
-                    output::print_output(&value, output_format)
+                    output::print_output(&value, output_format, query)
                 }
                 DeploymentOperationMgCommand::Show { name, management_group_id, operation_id } => {
                     let value = commands::deployment::operation::mg::show::execute(&client, &management_group_id, &name, &operation_id).await?;
-                    output::print_output(&value, output_format)
+                    output::print_output(&value, output_format, query)
                 }
             },
             DeploymentOperationCommand::Tenant { command } => match command {
                 DeploymentOperationTenantCommand::List { name } => {
                     let value = commands::deployment::operation::tenant::list::execute(&client, &name).await?;
-                    output::print_output(&value, output_format)
+                    output::print_output(&value, output_format, query)
                 }
                 DeploymentOperationTenantCommand::Show { name, operation_id } => {
                     let value = commands::deployment::operation::tenant::show::execute(&client, &name, &operation_id).await?;
-                    output::print_output(&value, output_format)
+                    output::print_output(&value, output_format, query)
                 }
             },
         },
@@ -2922,6 +2934,7 @@ async fn handle_bastion(
     cmd: BastionCommand,
     output_format: OutputFormat,
     subscription: Option<String>,
+    query: Option<&str>,
 ) -> anyhow::Result<()> {
     let mut provider = auth::TokenProvider::load(subscription)?;
     let access_token = provider.get_access_token().await?;
@@ -2969,7 +2982,7 @@ async fn handle_bastion(
                 tags_map,
             )
             .await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         BastionCommand::Delete {
             name,
@@ -2977,14 +2990,14 @@ async fn handle_bastion(
         } => client.delete(&resource_group, &name).await,
         BastionCommand::List { resource_group } => {
             let value = commands::list::execute_with_client(&client, resource_group.as_deref()).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         BastionCommand::Show {
             name,
             resource_group,
         } => {
             let value = commands::show::execute_with_client(&client, &resource_group, &name).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         BastionCommand::Update {
             name,
@@ -3017,7 +3030,7 @@ async fn handle_bastion(
                 tags_map,
             )
             .await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         BastionCommand::Ssh {
             name,
@@ -3120,6 +3133,7 @@ async fn handle_network_vnet(
     cmd: VnetCommand,
     output_format: OutputFormat,
     subscription: Option<String>,
+    query: Option<&str>,
 ) -> anyhow::Result<()> {
     let mut provider = auth::TokenProvider::load(subscription)?;
     let access_token = provider.get_access_token().await?;
@@ -3129,30 +3143,30 @@ async fn handle_network_vnet(
     match cmd {
         VnetCommand::List { resource_group } => {
             let value = commands::network::vnet::list::execute(&client, resource_group.as_deref()).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         VnetCommand::Show { name, resource_group } => {
             let value = commands::network::vnet::show::execute(&client, &resource_group, &name).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         VnetCommand::Subnet { command } => match command {
             VnetSubnetCommand::List { resource_group, vnet_name } => {
                 let value = commands::network::vnet::list_subnets::execute(&client, &resource_group, &vnet_name).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             VnetSubnetCommand::Show { name, resource_group, vnet_name } => {
                 let value = commands::network::vnet::show_subnet::execute(&client, &resource_group, &vnet_name, &name).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
         },
         VnetCommand::Peering { command } => match command {
             VnetPeeringCommand::List { resource_group, vnet_name } => {
                 let value = commands::network::vnet::list_peerings::execute(&client, &resource_group, &vnet_name).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             VnetPeeringCommand::Show { name, resource_group, vnet_name } => {
                 let value = commands::network::vnet::show_peering::execute(&client, &resource_group, &vnet_name, &name).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
         },
     }
@@ -3162,6 +3176,7 @@ async fn handle_network_nsg(
     cmd: NsgCommand,
     output_format: OutputFormat,
     subscription: Option<String>,
+    query: Option<&str>,
 ) -> anyhow::Result<()> {
     let mut provider = auth::TokenProvider::load(subscription)?;
     let access_token = provider.get_access_token().await?;
@@ -3171,20 +3186,20 @@ async fn handle_network_nsg(
     match cmd {
         NsgCommand::List { resource_group } => {
             let value = commands::network::nsg::list::execute(&client, resource_group.as_deref()).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         NsgCommand::Show { name, resource_group } => {
             let value = commands::network::nsg::show::execute(&client, &resource_group, &name).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         NsgCommand::Rule { command } => match command {
             NsgRuleCommand::List { resource_group, nsg_name } => {
                 let value = commands::network::nsg::list_rules::execute(&client, &resource_group, &nsg_name).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             NsgRuleCommand::Show { name, resource_group, nsg_name } => {
                 let value = commands::network::nsg::show_rule::execute(&client, &resource_group, &nsg_name, &name).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
         },
     }
@@ -3194,6 +3209,7 @@ async fn handle_network_public_ip(
     cmd: PublicIpCommand,
     output_format: OutputFormat,
     subscription: Option<String>,
+    query: Option<&str>,
 ) -> anyhow::Result<()> {
     let mut provider = auth::TokenProvider::load(subscription)?;
     let access_token = provider.get_access_token().await?;
@@ -3203,11 +3219,11 @@ async fn handle_network_public_ip(
     match cmd {
         PublicIpCommand::List { resource_group } => {
             let value = commands::network::public_ip::list::execute(&client, resource_group.as_deref()).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         PublicIpCommand::Show { name, resource_group } => {
             let value = commands::network::public_ip::show::execute(&client, &resource_group, &name).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
     }
 }
@@ -3216,6 +3232,7 @@ async fn handle_network_nic(
     cmd: NicCommand,
     output_format: OutputFormat,
     subscription: Option<String>,
+    query: Option<&str>,
 ) -> anyhow::Result<()> {
     let mut provider = auth::TokenProvider::load(subscription)?;
     let access_token = provider.get_access_token().await?;
@@ -3225,20 +3242,20 @@ async fn handle_network_nic(
     match cmd {
         NicCommand::List { resource_group } => {
             let value = commands::network::nic::list::execute(&client, resource_group.as_deref()).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         NicCommand::Show { name, resource_group } => {
             let value = commands::network::nic::show::execute(&client, &resource_group, &name).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         NicCommand::IpConfig { command } => match command {
             NicIpConfigCommand::List { resource_group, nic_name } => {
                 let value = commands::network::nic::list_ip_configs::execute(&client, &resource_group, &nic_name).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
             NicIpConfigCommand::Show { name, resource_group, nic_name } => {
                 let value = commands::network::nic::show_ip_config::execute(&client, &resource_group, &nic_name, &name).await?;
-                output::print_output(&value, output_format)
+                output::print_output(&value, output_format, query)
             }
         },
     }
@@ -3248,6 +3265,7 @@ async fn handle_network_private_endpoint(
     cmd: PrivateEndpointCommand,
     output_format: OutputFormat,
     subscription: Option<String>,
+    query: Option<&str>,
 ) -> anyhow::Result<()> {
     let mut provider = auth::TokenProvider::load(subscription)?;
     let access_token = provider.get_access_token().await?;
@@ -3257,11 +3275,11 @@ async fn handle_network_private_endpoint(
     match cmd {
         PrivateEndpointCommand::List { resource_group } => {
             let value = commands::network::private_endpoint::list::execute(&client, resource_group.as_deref()).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
         PrivateEndpointCommand::Show { name, resource_group } => {
             let value = commands::network::private_endpoint::show::execute(&client, &resource_group, &name).await?;
-            output::print_output(&value, output_format)
+            output::print_output(&value, output_format, query)
         }
     }
 }

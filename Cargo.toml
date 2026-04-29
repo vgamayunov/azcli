@@ -57,3 +57,6 @@ open = "5"
 
 # Chrono for token expiry timestamps
 chrono = { version = "0.4", features = ["serde", "clock"], default-features = false }
+
+# JMESPath for --query flag (matches az CLI behavior)
+jmespath = "0.5"
