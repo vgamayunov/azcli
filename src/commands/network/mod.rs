@@ -4,6 +4,7 @@ pub mod lb;
 pub mod nat;
 pub mod nic;
 pub mod nsg;
+pub mod private_dns;
 pub mod private_endpoint;
 pub mod public_ip;
 pub mod route_table;
