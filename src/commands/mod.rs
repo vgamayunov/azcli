@@ -10,6 +10,7 @@ pub mod rdp;
 pub mod rest;
 pub mod role;
 pub mod show;
+pub mod sig;
 pub mod ssh;
 pub mod tunnel;
 pub mod update;

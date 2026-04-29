@@ -86,6 +86,11 @@ enum CliCommand {
         command: ImageCommand,
     },
 
+    Sig {
+        #[command(subcommand)]
+        command: SigCommand,
+    },
+
     Deployment {
         #[command(subcommand)]
         command: DeploymentCommand,
@@ -835,6 +840,168 @@ enum ImageBuilderCommand {
         resource_group: String,
         #[arg(long = "output-name")]
         output_name: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum SigCommand {
+    List {
+        #[arg(short = 'g', long)]
+        resource_group: Option<String>,
+    },
+    Show {
+        #[arg(short = 'r', long = "gallery-name")]
+        gallery_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+    #[command(name = "list-shared")]
+    ListShared {
+        #[arg(short, long)]
+        location: String,
+        #[arg(long = "shared-to")]
+        shared_to: Option<String>,
+    },
+    #[command(name = "show-shared")]
+    ShowShared {
+        #[arg(short, long)]
+        location: String,
+        #[arg(short = 'r', long = "gallery-unique-name")]
+        gallery_unique_name: String,
+    },
+    #[command(name = "list-community")]
+    ListCommunity {
+        #[arg(short, long)]
+        location: Option<String>,
+    },
+    #[command(name = "show-community")]
+    ShowCommunity {
+        #[arg(short, long)]
+        location: String,
+        #[arg(short = 'p', long = "public-gallery-name")]
+        public_gallery_name: String,
+    },
+    #[command(name = "image-definition")]
+    ImageDefinition {
+        #[command(subcommand)]
+        command: SigImageDefinitionCommand,
+    },
+    #[command(name = "image-version")]
+    ImageVersion {
+        #[command(subcommand)]
+        command: SigImageVersionCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum SigImageDefinitionCommand {
+    List {
+        #[arg(short = 'g', long)]
+        resource_group: String,
+        #[arg(short = 'r', long = "gallery-name")]
+        gallery_name: String,
+    },
+    Show {
+        #[arg(short = 'g', long)]
+        resource_group: String,
+        #[arg(short = 'r', long = "gallery-name")]
+        gallery_name: String,
+        #[arg(short = 'i', long = "gallery-image-definition")]
+        gallery_image_definition: String,
+    },
+    #[command(name = "list-shared")]
+    ListShared {
+        #[arg(short, long)]
+        location: String,
+        #[arg(short = 'r', long = "gallery-unique-name")]
+        gallery_unique_name: String,
+    },
+    #[command(name = "show-shared")]
+    ShowShared {
+        #[arg(short, long)]
+        location: String,
+        #[arg(short = 'r', long = "gallery-unique-name")]
+        gallery_unique_name: String,
+        #[arg(short = 'i', long = "gallery-image-definition")]
+        gallery_image_definition: String,
+    },
+    #[command(name = "list-community")]
+    ListCommunity {
+        #[arg(short, long)]
+        location: String,
+        #[arg(short = 'p', long = "public-gallery-name")]
+        public_gallery_name: String,
+    },
+    #[command(name = "show-community")]
+    ShowCommunity {
+        #[arg(short, long)]
+        location: String,
+        #[arg(short = 'p', long = "public-gallery-name")]
+        public_gallery_name: String,
+        #[arg(short = 'i', long = "gallery-image-definition")]
+        gallery_image_definition: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum SigImageVersionCommand {
+    List {
+        #[arg(short = 'g', long)]
+        resource_group: String,
+        #[arg(short = 'r', long = "gallery-name")]
+        gallery_name: String,
+        #[arg(short = 'i', long = "gallery-image-definition")]
+        gallery_image_definition: String,
+    },
+    Show {
+        #[arg(short = 'g', long)]
+        resource_group: String,
+        #[arg(short = 'r', long = "gallery-name")]
+        gallery_name: String,
+        #[arg(short = 'i', long = "gallery-image-definition")]
+        gallery_image_definition: String,
+        #[arg(short = 'e', long = "gallery-image-version")]
+        gallery_image_version: String,
+    },
+    #[command(name = "list-shared")]
+    ListShared {
+        #[arg(short, long)]
+        location: String,
+        #[arg(short = 'r', long = "gallery-unique-name")]
+        gallery_unique_name: String,
+        #[arg(short = 'i', long = "gallery-image-definition")]
+        gallery_image_definition: String,
+    },
+    #[command(name = "show-shared")]
+    ShowShared {
+        #[arg(short, long)]
+        location: String,
+        #[arg(short = 'r', long = "gallery-unique-name")]
+        gallery_unique_name: String,
+        #[arg(short = 'i', long = "gallery-image-definition")]
+        gallery_image_definition: String,
+        #[arg(short = 'e', long = "gallery-image-version")]
+        gallery_image_version: String,
+    },
+    #[command(name = "list-community")]
+    ListCommunity {
+        #[arg(short, long)]
+        location: String,
+        #[arg(short = 'p', long = "public-gallery-name")]
+        public_gallery_name: String,
+        #[arg(short = 'i', long = "gallery-image-definition")]
+        gallery_image_definition: String,
+    },
+    #[command(name = "show-community")]
+    ShowCommunity {
+        #[arg(short, long)]
+        location: String,
+        #[arg(short = 'p', long = "public-gallery-name")]
+        public_gallery_name: String,
+        #[arg(short = 'i', long = "gallery-image-definition")]
+        gallery_image_definition: String,
+        #[arg(short = 'e', long = "gallery-image-version")]
+        gallery_image_version: String,
     },
 }
 
@@ -1687,6 +1854,10 @@ async fn main() -> anyhow::Result<()> {
             handle_image(command, output_format, subscription).await
         }
 
+        CliCommand::Sig { command } => {
+            handle_sig(command, output_format, subscription).await
+        }
+
         CliCommand::Deployment { command } => {
             handle_deployment(command, output_format, subscription).await
         }
@@ -2203,6 +2374,98 @@ async fn handle_image(
                     output_name.as_deref(),
                 )
                 .await?;
+                output::print_output(&value, output_format)
+            }
+        },
+    }
+}
+
+async fn handle_sig(
+    cmd: SigCommand,
+    output_format: OutputFormat,
+    subscription: Option<String>,
+) -> anyhow::Result<()> {
+    let mut provider = auth::TokenProvider::load(subscription)?;
+    let access_token = provider.get_access_token().await?;
+    let subscription_id = provider.get_subscription_id_or_fallback().await?;
+
+    let client = arm_client::ArmClient::new(access_token, subscription_id);
+
+    match cmd {
+        SigCommand::List { resource_group } => {
+            let value = commands::sig::list::execute(&client, resource_group.as_deref()).await?;
+            output::print_output(&value, output_format)
+        }
+        SigCommand::Show { gallery_name, resource_group } => {
+            let value = commands::sig::show::execute(&client, &resource_group, &gallery_name).await?;
+            output::print_output(&value, output_format)
+        }
+        SigCommand::ListShared { location, shared_to } => {
+            let to_tenant = shared_to.as_deref() == Some("tenant");
+            let value = commands::sig::list_shared::execute(&client, &location, to_tenant).await?;
+            output::print_output(&value, output_format)
+        }
+        SigCommand::ShowShared { location, gallery_unique_name } => {
+            let value = commands::sig::show_shared::execute(&client, &location, &gallery_unique_name).await?;
+            output::print_output(&value, output_format)
+        }
+        SigCommand::ListCommunity { location } => {
+            let value = commands::sig::list_community::execute(&client, location.as_deref()).await?;
+            output::print_output(&value, output_format)
+        }
+        SigCommand::ShowCommunity { location, public_gallery_name } => {
+            let value = commands::sig::show_community::execute(&client, &location, &public_gallery_name).await?;
+            output::print_output(&value, output_format)
+        }
+        SigCommand::ImageDefinition { command } => match command {
+            SigImageDefinitionCommand::List { resource_group, gallery_name } => {
+                let value = commands::sig::image_definition::list::execute(&client, &resource_group, &gallery_name).await?;
+                output::print_output(&value, output_format)
+            }
+            SigImageDefinitionCommand::Show { resource_group, gallery_name, gallery_image_definition } => {
+                let value = commands::sig::image_definition::show::execute(&client, &resource_group, &gallery_name, &gallery_image_definition).await?;
+                output::print_output(&value, output_format)
+            }
+            SigImageDefinitionCommand::ListShared { location, gallery_unique_name } => {
+                let value = commands::sig::image_definition::list_shared::execute(&client, &location, &gallery_unique_name).await?;
+                output::print_output(&value, output_format)
+            }
+            SigImageDefinitionCommand::ShowShared { location, gallery_unique_name, gallery_image_definition } => {
+                let value = commands::sig::image_definition::show_shared::execute(&client, &location, &gallery_unique_name, &gallery_image_definition).await?;
+                output::print_output(&value, output_format)
+            }
+            SigImageDefinitionCommand::ListCommunity { location, public_gallery_name } => {
+                let value = commands::sig::image_definition::list_community::execute(&client, &location, &public_gallery_name).await?;
+                output::print_output(&value, output_format)
+            }
+            SigImageDefinitionCommand::ShowCommunity { location, public_gallery_name, gallery_image_definition } => {
+                let value = commands::sig::image_definition::show_community::execute(&client, &location, &public_gallery_name, &gallery_image_definition).await?;
+                output::print_output(&value, output_format)
+            }
+        },
+        SigCommand::ImageVersion { command } => match command {
+            SigImageVersionCommand::List { resource_group, gallery_name, gallery_image_definition } => {
+                let value = commands::sig::image_version::list::execute(&client, &resource_group, &gallery_name, &gallery_image_definition).await?;
+                output::print_output(&value, output_format)
+            }
+            SigImageVersionCommand::Show { resource_group, gallery_name, gallery_image_definition, gallery_image_version } => {
+                let value = commands::sig::image_version::show::execute(&client, &resource_group, &gallery_name, &gallery_image_definition, &gallery_image_version).await?;
+                output::print_output(&value, output_format)
+            }
+            SigImageVersionCommand::ListShared { location, gallery_unique_name, gallery_image_definition } => {
+                let value = commands::sig::image_version::list_shared::execute(&client, &location, &gallery_unique_name, &gallery_image_definition).await?;
+                output::print_output(&value, output_format)
+            }
+            SigImageVersionCommand::ShowShared { location, gallery_unique_name, gallery_image_definition, gallery_image_version } => {
+                let value = commands::sig::image_version::show_shared::execute(&client, &location, &gallery_unique_name, &gallery_image_definition, &gallery_image_version).await?;
+                output::print_output(&value, output_format)
+            }
+            SigImageVersionCommand::ListCommunity { location, public_gallery_name, gallery_image_definition } => {
+                let value = commands::sig::image_version::list_community::execute(&client, &location, &public_gallery_name, &gallery_image_definition).await?;
+                output::print_output(&value, output_format)
+            }
+            SigImageVersionCommand::ShowCommunity { location, public_gallery_name, gallery_image_definition, gallery_image_version } => {
+                let value = commands::sig::image_version::show_community::execute(&client, &location, &public_gallery_name, &gallery_image_definition, &gallery_image_version).await?;
                 output::print_output(&value, output_format)
             }
         },

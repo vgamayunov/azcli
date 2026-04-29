@@ -18,6 +18,7 @@ const ROLE_DEFINITION_API_VERSION: &str = "2022-04-01";
 const ROLE_ASSIGNMENT_API_VERSION: &str = "2022-04-01";
 const IMAGE_API_VERSION: &str = "2024-07-01";
 const IMAGE_BUILDER_API_VERSION: &str = "2022-07-01";
+const SIG_API_VERSION: &str = "2024-03-03";
 
 #[derive(Clone)]
 pub struct ArmClient {
@@ -1065,6 +1066,187 @@ impl ArmClient {
             anyhow::bail!("Get run output failed ({status}): {body}");
         }
         resp.json().await.context("Failed to parse run output response")
+    }
+
+    async fn arm_get(&self, url: String, what: &'static str) -> Result<serde_json::Value> {
+        debug!("GET {url}");
+        let resp = self.client.get(&url).bearer_auth(&self.access_token).send().await
+            .with_context(|| format!("Failed to {what}"))?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("{what} failed ({status}): {body}");
+        }
+        resp.json().await.with_context(|| format!("Failed to parse {what} response"))
+    }
+
+    pub async fn list_galleries(&self, resource_group: Option<&str>) -> Result<serde_json::Value> {
+        let url = match resource_group {
+            Some(rg) => format!(
+                "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/galleries?api-version={}",
+                self.subscription_id, rg, SIG_API_VERSION
+            ),
+            None => format!(
+                "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/galleries?api-version={}",
+                self.subscription_id, SIG_API_VERSION
+            ),
+        };
+        self.arm_get(url, "list galleries").await
+    }
+
+    pub async fn show_gallery(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/galleries/{}?api-version={}",
+            self.subscription_id, resource_group, name, SIG_API_VERSION
+        );
+        self.arm_get(url, "get gallery").await
+    }
+
+    pub async fn list_shared_galleries(&self, location: &str, shared_to_tenant: bool) -> Result<serde_json::Value> {
+        let suffix = if shared_to_tenant { "&sharedTo=tenant" } else { "" };
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/locations/{}/sharedGalleries?api-version={}{}",
+            self.subscription_id, location, SIG_API_VERSION, suffix
+        );
+        self.arm_get(url, "list shared galleries").await
+    }
+
+    pub async fn show_shared_gallery(&self, location: &str, gallery_unique_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/locations/{}/sharedGalleries/{}?api-version={}",
+            self.subscription_id, location, gallery_unique_name, SIG_API_VERSION
+        );
+        self.arm_get(url, "get shared gallery").await
+    }
+
+    pub async fn show_community_gallery(&self, location: &str, public_gallery_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/locations/{}/communityGalleries/{}?api-version={}",
+            self.subscription_id, location, public_gallery_name, SIG_API_VERSION
+        );
+        self.arm_get(url, "get community gallery").await
+    }
+
+    pub async fn list_community_galleries(&self, location: Option<&str>, top: usize) -> Result<serde_json::Value> {
+        let where_loc = match location {
+            Some(loc) => format!(" | where location == '{}'", loc.replace('\'', "''")),
+            None => String::new(),
+        };
+        let query = format!(
+            "communitygalleryresources | where type == 'microsoft.compute/locations/communitygalleries'{}",
+            where_loc
+        );
+        let body = serde_json::json!({
+            "query": query,
+            "options": { "$top": top },
+        });
+        let url = "https://management.azure.com/providers/Microsoft.ResourceGraph/resources?api-version=2021-03-01";
+        debug!("POST {url}\n{body}");
+        let resp = self.client.post(url).bearer_auth(&self.access_token).json(&body).send().await
+            .context("Failed to query Resource Graph for community galleries")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            anyhow::bail!("List community galleries failed ({status}): {text}");
+        }
+        let json: serde_json::Value = resp.json().await.context("Failed to parse Resource Graph response")?;
+        Ok(json.get("data").cloned().unwrap_or(serde_json::Value::Array(vec![])))
+    }
+
+    pub async fn list_gallery_image_definitions(&self, resource_group: &str, gallery_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/galleries/{}/images?api-version={}",
+            self.subscription_id, resource_group, gallery_name, SIG_API_VERSION
+        );
+        self.arm_get(url, "list gallery image definitions").await
+    }
+
+    pub async fn show_gallery_image_definition(&self, resource_group: &str, gallery_name: &str, image_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/galleries/{}/images/{}?api-version={}",
+            self.subscription_id, resource_group, gallery_name, image_name, SIG_API_VERSION
+        );
+        self.arm_get(url, "get gallery image definition").await
+    }
+
+    pub async fn list_shared_gallery_image_definitions(&self, location: &str, gallery_unique_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/locations/{}/sharedGalleries/{}/images?api-version={}",
+            self.subscription_id, location, gallery_unique_name, SIG_API_VERSION
+        );
+        self.arm_get(url, "list shared gallery image definitions").await
+    }
+
+    pub async fn show_shared_gallery_image_definition(&self, location: &str, gallery_unique_name: &str, image_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/locations/{}/sharedGalleries/{}/images/{}?api-version={}",
+            self.subscription_id, location, gallery_unique_name, image_name, SIG_API_VERSION
+        );
+        self.arm_get(url, "get shared gallery image definition").await
+    }
+
+    pub async fn list_community_gallery_image_definitions(&self, location: &str, public_gallery_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/locations/{}/communityGalleries/{}/images?api-version={}",
+            self.subscription_id, location, public_gallery_name, SIG_API_VERSION
+        );
+        self.arm_get(url, "list community gallery image definitions").await
+    }
+
+    pub async fn show_community_gallery_image_definition(&self, location: &str, public_gallery_name: &str, image_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/locations/{}/communityGalleries/{}/images/{}?api-version={}",
+            self.subscription_id, location, public_gallery_name, image_name, SIG_API_VERSION
+        );
+        self.arm_get(url, "get community gallery image definition").await
+    }
+
+    pub async fn list_gallery_image_versions(&self, resource_group: &str, gallery_name: &str, image_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/galleries/{}/images/{}/versions?api-version={}",
+            self.subscription_id, resource_group, gallery_name, image_name, SIG_API_VERSION
+        );
+        self.arm_get(url, "list gallery image versions").await
+    }
+
+    pub async fn show_gallery_image_version(&self, resource_group: &str, gallery_name: &str, image_name: &str, version: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/galleries/{}/images/{}/versions/{}?api-version={}",
+            self.subscription_id, resource_group, gallery_name, image_name, version, SIG_API_VERSION
+        );
+        self.arm_get(url, "get gallery image version").await
+    }
+
+    pub async fn list_shared_gallery_image_versions(&self, location: &str, gallery_unique_name: &str, image_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/locations/{}/sharedGalleries/{}/images/{}/versions?api-version={}",
+            self.subscription_id, location, gallery_unique_name, image_name, SIG_API_VERSION
+        );
+        self.arm_get(url, "list shared gallery image versions").await
+    }
+
+    pub async fn show_shared_gallery_image_version(&self, location: &str, gallery_unique_name: &str, image_name: &str, version: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/locations/{}/sharedGalleries/{}/images/{}/versions/{}?api-version={}",
+            self.subscription_id, location, gallery_unique_name, image_name, version, SIG_API_VERSION
+        );
+        self.arm_get(url, "get shared gallery image version").await
+    }
+
+    pub async fn list_community_gallery_image_versions(&self, location: &str, public_gallery_name: &str, image_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/locations/{}/communityGalleries/{}/images/{}/versions?api-version={}",
+            self.subscription_id, location, public_gallery_name, image_name, SIG_API_VERSION
+        );
+        self.arm_get(url, "list community gallery image versions").await
+    }
+
+    pub async fn show_community_gallery_image_version(&self, location: &str, public_gallery_name: &str, image_name: &str, version: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/providers/Microsoft.Compute/locations/{}/communityGalleries/{}/images/{}/versions/{}?api-version={}",
+            self.subscription_id, location, public_gallery_name, image_name, version, SIG_API_VERSION
+        );
+        self.arm_get(url, "get community gallery image version").await
     }
 
     pub async fn create_disk(&self, resource_group: &str, name: &str, body: serde_json::Value) -> Result<serde_json::Value> {

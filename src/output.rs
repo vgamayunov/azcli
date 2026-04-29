@@ -262,6 +262,49 @@ fn pick_table_columns(sample: &serde_json::Value) -> Vec<String> {
                 "properties.lastRunStatus.runState".to_string(),
             ];
         }
+        if t.eq_ignore_ascii_case("Microsoft.Compute/galleries") {
+            return vec![
+                "name".to_string(),
+                "@resourceGroup".to_string(),
+                "location".to_string(),
+                "properties.provisioningState".to_string(),
+                "properties.sharingProfile.permissions".to_string(),
+            ];
+        }
+        if t.eq_ignore_ascii_case("Microsoft.Compute/galleries/images") {
+            return vec![
+                "name".to_string(),
+                "@resourceGroup".to_string(),
+                "location".to_string(),
+                "properties.osType".to_string(),
+                "properties.hyperVGeneration".to_string(),
+                "properties.provisioningState".to_string(),
+            ];
+        }
+        if t.eq_ignore_ascii_case("Microsoft.Compute/galleries/images/versions") {
+            return vec![
+                "name".to_string(),
+                "@resourceGroup".to_string(),
+                "location".to_string(),
+                "properties.publishingProfile.excludeFromLatest".to_string(),
+                "properties.provisioningState".to_string(),
+            ];
+        }
+        if t.eq_ignore_ascii_case("microsoft.compute/locations/communitygalleries") {
+            return vec![
+                "name".to_string(),
+                "location".to_string(),
+                "properties.publicNames".to_string(),
+            ];
+        }
+    }
+
+    if obj.contains_key("identifier") && obj.contains_key("uniqueId") && obj.get("location").is_some() {
+        return vec![
+            "name".to_string(),
+            "location".to_string(),
+            "identifier.uniqueId".to_string(),
+        ];
     }
 
     let preferred = [

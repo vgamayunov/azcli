@@ -30,6 +30,7 @@ azcli group list -o table
 | [`vm run-command`](docs/virtual-machines.md#vm-run-command) | Full | 6 | Invoke, list, show, create, update, delete |
 | [`disk`](docs/managed-disks.md) | Full | 8 | List, show, list-skus, create, update, delete, grant-access, revoke-access |
 | [`image`](docs/image.md) | Read | 5 | list, show; `image builder` list, show, show-runs |
+| [`sig`](docs/sig.md) | Read | 18 | Galleries, image definitions, image versions (incl. shared & community) |
 | [`vmss`](docs/virtual-machine-scale-sets.md) | Partial | 11 | Core commands. Subgroups not yet implemented |
 | [`deployment`](docs/deployments.md) | Full | 44 | All four ARM scopes (group, sub, mg, tenant) + operations |
 | [`network bastion`](docs/bastion.md) | Full | 9 | SSH, RDP, tunnel with custom WebSocket implementation |
