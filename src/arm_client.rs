@@ -2060,6 +2060,167 @@ impl ArmClient {
         self.arm_get(url, "get packet capture").await
     }
 
+
+    pub async fn list_application_gateways(&self) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/providers/Microsoft.Network/applicationGateways?api-version=2023-11-01",
+            self.subscription_id
+        );
+        self.arm_get_paginated(url, "list application gateways").await
+    }
+
+    pub async fn show_application_gateway(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/applicationGateways/{}?api-version=2023-11-01",
+            self.subscription_id, resource_group, name
+        );
+        self.arm_get(url, "get application gateway").await
+    }
+
+    pub async fn list_application_gateway_address_pools(&self, resource_group: &str, gateway_name: &str) -> Result<serde_json::Value> {
+        let gw = self.show_application_gateway(resource_group, gateway_name).await?;
+        if let Some(pools) = gw.get("properties").and_then(|p| p.get("backendAddressPools")) {
+            Ok(serde_json::json!({"value": pools}))
+        } else {
+            Ok(serde_json::json!({"value": []}))
+        }
+    }
+
+    pub async fn list_application_gateway_auth_certs(&self, resource_group: &str, gateway_name: &str) -> Result<serde_json::Value> {
+        let gw = self.show_application_gateway(resource_group, gateway_name).await?;
+        if let Some(certs) = gw.get("properties").and_then(|p| p.get("authenticationCertificates")) {
+            Ok(serde_json::json!({"value": certs}))
+        } else {
+            Ok(serde_json::json!({"value": []}))
+        }
+    }
+
+    pub async fn list_application_gateway_client_certs(&self, resource_group: &str, gateway_name: &str) -> Result<serde_json::Value> {
+        let gw = self.show_application_gateway(resource_group, gateway_name).await?;
+        if let Some(certs) = gw.get("properties").and_then(|p| p.get("clientCertificates")) {
+            Ok(serde_json::json!({"value": certs}))
+        } else {
+            Ok(serde_json::json!({"value": []}))
+        }
+    }
+
+    pub async fn list_application_gateway_frontend_ips(&self, resource_group: &str, gateway_name: &str) -> Result<serde_json::Value> {
+        let gw = self.show_application_gateway(resource_group, gateway_name).await?;
+        if let Some(ips) = gw.get("properties").and_then(|p| p.get("frontendIPConfigurations")) {
+            Ok(serde_json::json!({"value": ips}))
+        } else {
+            Ok(serde_json::json!({"value": []}))
+        }
+    }
+
+    pub async fn list_application_gateway_frontend_ports(&self, resource_group: &str, gateway_name: &str) -> Result<serde_json::Value> {
+        let gw = self.show_application_gateway(resource_group, gateway_name).await?;
+        if let Some(ports) = gw.get("properties").and_then(|p| p.get("frontendPorts")) {
+            Ok(serde_json::json!({"value": ports}))
+        } else {
+            Ok(serde_json::json!({"value": []}))
+        }
+    }
+
+    pub async fn list_application_gateway_http_listeners(&self, resource_group: &str, gateway_name: &str) -> Result<serde_json::Value> {
+        let gw = self.show_application_gateway(resource_group, gateway_name).await?;
+        if let Some(listeners) = gw.get("properties").and_then(|p| p.get("httpListeners")) {
+            Ok(serde_json::json!({"value": listeners}))
+        } else {
+            Ok(serde_json::json!({"value": []}))
+        }
+    }
+
+    pub async fn list_application_gateway_http_settings(&self, resource_group: &str, gateway_name: &str) -> Result<serde_json::Value> {
+        let gw = self.show_application_gateway(resource_group, gateway_name).await?;
+        if let Some(settings) = gw.get("properties").and_then(|p| p.get("backendHttpSettingsCollection")) {
+            Ok(serde_json::json!({"value": settings}))
+        } else {
+            Ok(serde_json::json!({"value": []}))
+        }
+    }
+
+    pub async fn list_application_gateway_probes(&self, resource_group: &str, gateway_name: &str) -> Result<serde_json::Value> {
+        let gw = self.show_application_gateway(resource_group, gateway_name).await?;
+        if let Some(probes) = gw.get("properties").and_then(|p| p.get("probes")) {
+            Ok(serde_json::json!({"value": probes}))
+        } else {
+            Ok(serde_json::json!({"value": []}))
+        }
+    }
+
+    pub async fn list_application_gateway_redirect_configs(&self, resource_group: &str, gateway_name: &str) -> Result<serde_json::Value> {
+        let gw = self.show_application_gateway(resource_group, gateway_name).await?;
+        if let Some(configs) = gw.get("properties").and_then(|p| p.get("redirectConfigurations")) {
+            Ok(serde_json::json!({"value": configs}))
+        } else {
+            Ok(serde_json::json!({"value": []}))
+        }
+    }
+
+    pub async fn list_application_gateway_rewrite_rules(&self, resource_group: &str, gateway_name: &str) -> Result<serde_json::Value> {
+        let gw = self.show_application_gateway(resource_group, gateway_name).await?;
+        if let Some(rules) = gw.get("properties").and_then(|p| p.get("rewriteRuleSets")) {
+            Ok(serde_json::json!({"value": rules}))
+        } else {
+            Ok(serde_json::json!({"value": []}))
+        }
+    }
+
+    pub async fn list_application_gateway_rules(&self, resource_group: &str, gateway_name: &str) -> Result<serde_json::Value> {
+        let gw = self.show_application_gateway(resource_group, gateway_name).await?;
+        if let Some(rules) = gw.get("properties").and_then(|p| p.get("requestRoutingRules")) {
+            Ok(serde_json::json!({"value": rules}))
+        } else {
+            Ok(serde_json::json!({"value": []}))
+        }
+    }
+
+    pub async fn list_application_gateway_ssl_certs(&self, resource_group: &str, gateway_name: &str) -> Result<serde_json::Value> {
+        let gw = self.show_application_gateway(resource_group, gateway_name).await?;
+        if let Some(certs) = gw.get("properties").and_then(|p| p.get("sslCertificates")) {
+            Ok(serde_json::json!({"value": certs}))
+        } else {
+            Ok(serde_json::json!({"value": []}))
+        }
+    }
+
+    pub async fn list_application_gateway_ssl_policies(&self, resource_group: &str, gateway_name: &str) -> Result<serde_json::Value> {
+        let gw = self.show_application_gateway(resource_group, gateway_name).await?;
+        if let Some(policies) = gw.get("properties").and_then(|p| p.get("sslPolicy")) {
+            Ok(serde_json::json!({"value": [policies]}))
+        } else {
+            Ok(serde_json::json!({"value": []}))
+        }
+    }
+
+    pub async fn list_application_gateway_ssl_profiles(&self, resource_group: &str, gateway_name: &str) -> Result<serde_json::Value> {
+        let gw = self.show_application_gateway(resource_group, gateway_name).await?;
+        if let Some(profiles) = gw.get("properties").and_then(|p| p.get("sslProfiles")) {
+            Ok(serde_json::json!({"value": profiles}))
+        } else {
+            Ok(serde_json::json!({"value": []}))
+        }
+    }
+
+    pub async fn show_application_gateway_settings(&self, resource_group: &str, gateway_name: &str) -> Result<serde_json::Value> {
+        let gw = self.show_application_gateway(resource_group, gateway_name).await?;
+        if let Some(settings) = gw.get("properties") {
+            Ok(settings.clone())
+        } else {
+            Ok(serde_json::json!({}))
+        }
+    }
+
+    pub async fn list_application_gateway_routing_rules(&self, resource_group: &str, gateway_name: &str) -> Result<serde_json::Value> {
+        let gw = self.show_application_gateway(resource_group, gateway_name).await?;
+        if let Some(rules) = gw.get("properties").and_then(|p| p.get("pathBasedRoutingRules")) {
+            Ok(serde_json::json!({"value": rules}))
+        } else {
+            Ok(serde_json::json!({"value": []}))
+        }
+    }
+
 }
 
 

@@ -1,3 +1,4 @@
+pub mod application_gateway;
 pub mod dns;
 pub mod lb;
 pub mod nic;

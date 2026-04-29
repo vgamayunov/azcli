@@ -1586,6 +1586,10 @@ enum NetworkCommand {
         #[command(subcommand)]
         command: WatcherCommand,
     },
+    ApplicationGateway {
+        #[command(subcommand)]
+        command: ApplicationGatewayCommand,
+    },
 }
 
 #[derive(Subcommand)]
@@ -2081,6 +2085,242 @@ enum WatcherPacketCaptureCommand {
 }
 
 
+#[derive(Subcommand)]
+enum ApplicationGatewayCommand {
+    List,
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+    AddressPool {
+        #[command(subcommand)]
+        command: ApplicationGatewayAddressPoolCommand,
+    },
+    AuthCert {
+        #[command(subcommand)]
+        command: ApplicationGatewayAuthCertCommand,
+    },
+    ClientCert {
+        #[command(subcommand)]
+        command: ApplicationGatewayClientCertCommand,
+    },
+    FrontendIp {
+        #[command(subcommand)]
+        command: ApplicationGatewayFrontendIpCommand,
+    },
+    FrontendPort {
+        #[command(subcommand)]
+        command: ApplicationGatewayFrontendPortCommand,
+    },
+    HttpListener {
+        #[command(subcommand)]
+        command: ApplicationGatewayHttpListenerCommand,
+    },
+    HttpSettings {
+        #[command(subcommand)]
+        command: ApplicationGatewayHttpSettingsCommand,
+    },
+    Probe {
+        #[command(subcommand)]
+        command: ApplicationGatewayProbeCommand,
+    },
+    RedirectConfig {
+        #[command(subcommand)]
+        command: ApplicationGatewayRedirectConfigCommand,
+    },
+    RewriteRule {
+        #[command(subcommand)]
+        command: ApplicationGatewayRewriteRuleCommand,
+    },
+    Rule {
+        #[command(subcommand)]
+        command: ApplicationGatewayRuleCommand,
+    },
+    SslCert {
+        #[command(subcommand)]
+        command: ApplicationGatewaySslCertCommand,
+    },
+    SslPolicy {
+        #[command(subcommand)]
+        command: ApplicationGatewaySslPolicyCommand,
+    },
+    SslProfile {
+        #[command(subcommand)]
+        command: ApplicationGatewaySslProfileCommand,
+    },
+    Settings {
+        #[command(subcommand)]
+        command: ApplicationGatewaySettingsCommand,
+    },
+    RoutingRule {
+        #[command(subcommand)]
+        command: ApplicationGatewayRoutingRuleCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum ApplicationGatewayAddressPoolCommand {
+    List {
+        #[arg(short, long)]
+        gateway_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ApplicationGatewayAuthCertCommand {
+    List {
+        #[arg(short, long)]
+        gateway_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ApplicationGatewayClientCertCommand {
+    List {
+        #[arg(short, long)]
+        gateway_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ApplicationGatewayFrontendIpCommand {
+    List {
+        #[arg(short, long)]
+        gateway_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ApplicationGatewayFrontendPortCommand {
+    List {
+        #[arg(short, long)]
+        gateway_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ApplicationGatewayHttpListenerCommand {
+    List {
+        #[arg(short, long)]
+        gateway_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ApplicationGatewayHttpSettingsCommand {
+    List {
+        #[arg(short, long)]
+        gateway_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ApplicationGatewayProbeCommand {
+    List {
+        #[arg(short, long)]
+        gateway_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ApplicationGatewayRedirectConfigCommand {
+    List {
+        #[arg(short, long)]
+        gateway_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ApplicationGatewayRewriteRuleCommand {
+    List {
+        #[arg(short, long)]
+        gateway_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ApplicationGatewayRuleCommand {
+    List {
+        #[arg(short, long)]
+        gateway_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ApplicationGatewaySslCertCommand {
+    List {
+        #[arg(short, long)]
+        gateway_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ApplicationGatewaySslPolicyCommand {
+    List {
+        #[arg(short, long)]
+        gateway_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ApplicationGatewaySslProfileCommand {
+    List {
+        #[arg(short, long)]
+        gateway_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ApplicationGatewaySettingsCommand {
+    Show {
+        #[arg(short, long)]
+        gateway_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ApplicationGatewayRoutingRuleCommand {
+    List {
+        #[arg(short, long)]
+        gateway_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+
 
 
 #[derive(Subcommand)]
@@ -2428,6 +2668,9 @@ async fn main() -> anyhow::Result<()> {
             }
             NetworkCommand::Watcher { command } => {
                 handle_network_watcher(command, output_format, subscription, query.as_deref()).await
+            }
+            NetworkCommand::ApplicationGateway { command } => {
+                handle_network_application_gateway(command, output_format, subscription, query.as_deref()).await
             }
         }
 
@@ -3889,6 +4132,157 @@ async fn handle_network_watcher(
                 }
                 WatcherPacketCaptureCommand::Show { name, watcher_name, resource_group } => {
                     let value = commands::network::watcher::packet_capture_show::execute(&client, &resource_group, &watcher_name, &name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+    }
+}
+
+async fn handle_network_application_gateway(
+    cmd: ApplicationGatewayCommand,
+    output_format: OutputFormat,
+    subscription: Option<String>,
+    query: Option<&str>,
+) -> anyhow::Result<()> {
+    let mut provider = auth::TokenProvider::load(subscription)?;
+    let access_token = provider.get_access_token().await?;
+    let subscription_id = provider.get_subscription_id_or_fallback().await?;
+    let client = arm_client::ArmClient::new(access_token, subscription_id);
+
+    match cmd {
+        ApplicationGatewayCommand::List => {
+            let value = commands::network::application_gateway::list::execute(&client).await?;
+            output::print_output(&value, output_format, query)
+        }
+        ApplicationGatewayCommand::Show { name, resource_group } => {
+            let value = commands::network::application_gateway::show::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format, query)
+        }
+        ApplicationGatewayCommand::AddressPool { command } => {
+            match command {
+                ApplicationGatewayAddressPoolCommand::List { gateway_name, resource_group } => {
+                    let value = commands::network::application_gateway::address_pool_list::execute(&client, &resource_group, &gateway_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+        ApplicationGatewayCommand::AuthCert { command } => {
+            match command {
+                ApplicationGatewayAuthCertCommand::List { gateway_name, resource_group } => {
+                    let value = commands::network::application_gateway::auth_cert_list::execute(&client, &resource_group, &gateway_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+        ApplicationGatewayCommand::ClientCert { command } => {
+            match command {
+                ApplicationGatewayClientCertCommand::List { gateway_name, resource_group } => {
+                    let value = commands::network::application_gateway::client_cert_list::execute(&client, &resource_group, &gateway_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+        ApplicationGatewayCommand::FrontendIp { command } => {
+            match command {
+                ApplicationGatewayFrontendIpCommand::List { gateway_name, resource_group } => {
+                    let value = commands::network::application_gateway::frontend_ip_list::execute(&client, &resource_group, &gateway_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+        ApplicationGatewayCommand::FrontendPort { command } => {
+            match command {
+                ApplicationGatewayFrontendPortCommand::List { gateway_name, resource_group } => {
+                    let value = commands::network::application_gateway::frontend_port_list::execute(&client, &resource_group, &gateway_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+        ApplicationGatewayCommand::HttpListener { command } => {
+            match command {
+                ApplicationGatewayHttpListenerCommand::List { gateway_name, resource_group } => {
+                    let value = commands::network::application_gateway::http_listener_list::execute(&client, &resource_group, &gateway_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+        ApplicationGatewayCommand::HttpSettings { command } => {
+            match command {
+                ApplicationGatewayHttpSettingsCommand::List { gateway_name, resource_group } => {
+                    let value = commands::network::application_gateway::http_settings_list::execute(&client, &resource_group, &gateway_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+        ApplicationGatewayCommand::Probe { command } => {
+            match command {
+                ApplicationGatewayProbeCommand::List { gateway_name, resource_group } => {
+                    let value = commands::network::application_gateway::probe_list::execute(&client, &resource_group, &gateway_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+        ApplicationGatewayCommand::RedirectConfig { command } => {
+            match command {
+                ApplicationGatewayRedirectConfigCommand::List { gateway_name, resource_group } => {
+                    let value = commands::network::application_gateway::redirect_config_list::execute(&client, &resource_group, &gateway_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+        ApplicationGatewayCommand::RewriteRule { command } => {
+            match command {
+                ApplicationGatewayRewriteRuleCommand::List { gateway_name, resource_group } => {
+                    let value = commands::network::application_gateway::rewrite_rule_list::execute(&client, &resource_group, &gateway_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+        ApplicationGatewayCommand::Rule { command } => {
+            match command {
+                ApplicationGatewayRuleCommand::List { gateway_name, resource_group } => {
+                    let value = commands::network::application_gateway::rule_list::execute(&client, &resource_group, &gateway_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+        ApplicationGatewayCommand::SslCert { command } => {
+            match command {
+                ApplicationGatewaySslCertCommand::List { gateway_name, resource_group } => {
+                    let value = commands::network::application_gateway::ssl_cert_list::execute(&client, &resource_group, &gateway_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+        ApplicationGatewayCommand::SslPolicy { command } => {
+            match command {
+                ApplicationGatewaySslPolicyCommand::List { gateway_name, resource_group } => {
+                    let value = commands::network::application_gateway::ssl_policy_list::execute(&client, &resource_group, &gateway_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+        ApplicationGatewayCommand::SslProfile { command } => {
+            match command {
+                ApplicationGatewaySslProfileCommand::List { gateway_name, resource_group } => {
+                    let value = commands::network::application_gateway::ssl_profile_list::execute(&client, &resource_group, &gateway_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+        ApplicationGatewayCommand::Settings { command } => {
+            match command {
+                ApplicationGatewaySettingsCommand::Show { gateway_name, resource_group } => {
+                    let value = commands::network::application_gateway::settings_show::execute(&client, &resource_group, &gateway_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+        ApplicationGatewayCommand::RoutingRule { command } => {
+            match command {
+                ApplicationGatewayRoutingRuleCommand::List { gateway_name, resource_group } => {
+                    let value = commands::network::application_gateway::routing_rule_list::execute(&client, &resource_group, &gateway_name).await?;
                     output::print_output(&value, output_format, query)
                 }
             }
