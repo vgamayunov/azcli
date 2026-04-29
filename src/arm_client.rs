@@ -2221,6 +2221,23 @@ impl ArmClient {
         }
     }
 
+
+    pub async fn list_nat_gateways(&self) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/providers/Microsoft.Network/natGateways?api-version=2023-11-01",
+            self.subscription_id
+        );
+        self.arm_get_paginated(url, "list NAT gateways").await
+    }
+
+    pub async fn show_nat_gateway(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/natGateways/{}?api-version=2023-11-01",
+            self.subscription_id, resource_group, name
+        );
+        self.arm_get(url, "get NAT gateway").await
+    }
+
 }
 
 

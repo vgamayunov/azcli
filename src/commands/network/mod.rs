@@ -1,6 +1,7 @@
 pub mod application_gateway;
 pub mod dns;
 pub mod lb;
+pub mod nat;
 pub mod nic;
 pub mod nsg;
 pub mod private_endpoint;
