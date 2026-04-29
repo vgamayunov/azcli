@@ -1904,7 +1904,46 @@ impl ArmClient {
         );
         self.arm_get(url, "get load balancer rule").await
     }
+    pub async fn list_route_tables(&self, resource_group: Option<&str>) -> Result<serde_json::Value> {
+        let url = match resource_group {
+            Some(rg) => format!(
+                "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/routeTables?api-version={}",
+                self.subscription_id, rg, NETWORK_API_VERSION
+            ),
+            None => format!(
+                "https://management.azure.com/subscriptions/{}/providers/Microsoft.Network/routeTables?api-version={}",
+                self.subscription_id, NETWORK_API_VERSION
+            ),
+        };
+        self.arm_get_paginated(url, "list route tables").await
+    }
+
+    pub async fn show_route_table(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/routeTables/{}?api-version={}",
+            self.subscription_id, resource_group, name, NETWORK_API_VERSION
+        );
+        self.arm_get(url, "get route table").await
+    }
+
+    pub async fn list_routes(&self, resource_group: &str, table_name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/routeTables/{}/routes?api-version={}",
+            self.subscription_id, resource_group, table_name, NETWORK_API_VERSION
+        );
+        self.arm_get_paginated(url, "list routes").await
+    }
+
+    pub async fn show_route(&self, resource_group: &str, table_name: &str, name: &str) -> Result<serde_json::Value> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/routeTables/{}/routes/{}?api-version={}",
+            self.subscription_id, resource_group, table_name, name, NETWORK_API_VERSION
+        );
+        self.arm_get(url, "get route").await
+    }
+
 }
+
 
 fn urlencode(s: &str) -> String {
     let mut out = String::with_capacity(s.len());

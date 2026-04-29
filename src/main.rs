@@ -1574,6 +1574,10 @@ enum NetworkCommand {
         #[command(subcommand)]
         command: LoadBalancerCommand,
     },
+    RouteTable {
+        #[command(subcommand)]
+        command: RouteTableCommand,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1914,6 +1918,43 @@ enum LoadBalancerRuleCommand {
     },
 }
 
+#[derive(Subcommand)]
+enum RouteTableCommand {
+    List {
+        #[arg(short = 'g', long)]
+        resource_group: Option<String>,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+    Route {
+        #[command(subcommand)]
+        command: RouteTableRouteCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum RouteTableRouteCommand {
+    List {
+        #[arg(short, long)]
+        table_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        table_name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
+    },
+}
+
+
 
 #[derive(Subcommand)]
 enum BastionCommand {
@@ -2251,6 +2292,9 @@ async fn main() -> anyhow::Result<()> {
             }
             NetworkCommand::Lb { command } => {
                 handle_network_lb(command, output_format, subscription, query.as_deref()).await
+            }
+            NetworkCommand::RouteTable { command } => {
+                handle_network_route_table(command, output_format, subscription, query.as_deref()).await
             }
         }
 
@@ -3586,4 +3630,40 @@ async fn handle_network_lb(
         }
     }
 }
+
+async fn handle_network_route_table(
+    cmd: RouteTableCommand,
+    output_format: OutputFormat,
+    subscription: Option<String>,
+    query: Option<&str>,
+) -> anyhow::Result<()> {
+    let mut provider = auth::TokenProvider::load(subscription)?;
+    let access_token = provider.get_access_token().await?;
+    let subscription_id = provider.get_subscription_id_or_fallback().await?;
+    let client = arm_client::ArmClient::new(access_token, subscription_id);
+
+    match cmd {
+        RouteTableCommand::List { resource_group } => {
+            let value = commands::network::route_table::list::execute(&client, resource_group.as_deref()).await?;
+            output::print_output(&value, output_format, query)
+        }
+        RouteTableCommand::Show { name, resource_group } => {
+            let value = commands::network::route_table::show::execute(&client, &resource_group, &name).await?;
+            output::print_output(&value, output_format, query)
+        }
+        RouteTableCommand::Route { command } => {
+            match command {
+                RouteTableRouteCommand::List { table_name, resource_group } => {
+                    let value = commands::network::route_table::route_list::execute(&client, &resource_group, &table_name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+                RouteTableRouteCommand::Show { name, table_name, resource_group } => {
+                    let value = commands::network::route_table::route_show::execute(&client, &resource_group, &table_name, &name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
+        }
+    }
+}
+
 
