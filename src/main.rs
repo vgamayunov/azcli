@@ -1992,19 +1992,27 @@ enum RouteTableRouteCommand {
 
 #[derive(Subcommand)]
 enum DnsCommand {
-    ListZone {
-        #[arg(short = 'g', long)]
-        resource_group: Option<String>,
-    },
-    ShowZone {
-        #[arg(short, long)]
-        name: String,
-        #[arg(short = 'g', long)]
-        resource_group: String,
+    Zone {
+        #[command(subcommand)]
+        command: DnsZoneCommand,
     },
     RecordSet {
         #[command(subcommand)]
         command: DnsRecordSetCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum DnsZoneCommand {
+    List {
+        #[arg(short = 'g', long)]
+        resource_group: Option<String>,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
     },
 }
 
@@ -2347,6 +2355,14 @@ enum ApplicationGatewayRoutingRuleCommand {
 
 #[derive(Subcommand)]
 enum NatCommand {
+    Gateway {
+        #[command(subcommand)]
+        command: NatGatewayCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum NatGatewayCommand {
     List,
     Show {
         #[arg(short, long)]
@@ -2359,19 +2375,27 @@ enum NatCommand {
 
 #[derive(Subcommand)]
 enum PrivateDnsCommand {
-    ListZone {
-        #[arg(short = 'g', long)]
-        resource_group: Option<String>,
-    },
-    ShowZone {
-        #[arg(short, long)]
-        name: String,
-        #[arg(short = 'g', long)]
-        resource_group: String,
+    Zone {
+        #[command(subcommand)]
+        command: PrivateDnsZoneCommand,
     },
     RecordSet {
         #[command(subcommand)]
         command: PrivateDnsRecordSetCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum PrivateDnsZoneCommand {
+    List {
+        #[arg(short = 'g', long)]
+        resource_group: Option<String>,
+    },
+    Show {
+        #[arg(short, long)]
+        name: String,
+        #[arg(short = 'g', long)]
+        resource_group: String,
     },
 }
 
@@ -4206,13 +4230,17 @@ async fn handle_network_dns(
     let client = arm_client::ArmClient::new(access_token, subscription_id);
 
     match cmd {
-        DnsCommand::ListZone { resource_group } => {
-            let value = commands::network::dns::list_zone::execute(&client, resource_group.as_deref()).await?;
-            output::print_output(&value, output_format, query)
-        }
-        DnsCommand::ShowZone { name, resource_group } => {
-            let value = commands::network::dns::show_zone::execute(&client, &resource_group, &name).await?;
-            output::print_output(&value, output_format, query)
+        DnsCommand::Zone { command } => {
+            match command {
+                DnsZoneCommand::List { resource_group } => {
+                    let value = commands::network::dns::list_zone::execute(&client, resource_group.as_deref()).await?;
+                    output::print_output(&value, output_format, query)
+                }
+                DnsZoneCommand::Show { name, resource_group } => {
+                    let value = commands::network::dns::show_zone::execute(&client, &resource_group, &name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
         }
         DnsCommand::RecordSet { command } => {
             match command {
@@ -4454,13 +4482,17 @@ async fn handle_network_nat(
     let client = arm_client::ArmClient::new(access_token, subscription_id);
 
     match cmd {
-        NatCommand::List => {
-            let value = commands::network::nat::list::execute(&client).await?;
-            output::print_output(&value, output_format, query)
-        }
-        NatCommand::Show { name, resource_group } => {
-            let value = commands::network::nat::show::execute(&client, &resource_group, &name).await?;
-            output::print_output(&value, output_format, query)
+        NatCommand::Gateway { command } => {
+            match command {
+                NatGatewayCommand::List => {
+                    let value = commands::network::nat::list::execute(&client).await?;
+                    output::print_output(&value, output_format, query)
+                }
+                NatGatewayCommand::Show { name, resource_group } => {
+                    let value = commands::network::nat::show::execute(&client, &resource_group, &name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
         }
     }
 }
@@ -4477,13 +4509,17 @@ async fn handle_network_private_dns(
     let client = arm_client::ArmClient::new(access_token, subscription_id);
 
     match cmd {
-        PrivateDnsCommand::ListZone { resource_group } => {
-            let value = commands::network::private_dns::list_zone::execute(&client, resource_group.as_deref()).await?;
-            output::print_output(&value, output_format, query)
-        }
-        PrivateDnsCommand::ShowZone { name, resource_group } => {
-            let value = commands::network::private_dns::show_zone::execute(&client, &resource_group, &name).await?;
-            output::print_output(&value, output_format, query)
+        PrivateDnsCommand::Zone { command } => {
+            match command {
+                PrivateDnsZoneCommand::List { resource_group } => {
+                    let value = commands::network::private_dns::list_zone::execute(&client, resource_group.as_deref()).await?;
+                    output::print_output(&value, output_format, query)
+                }
+                PrivateDnsZoneCommand::Show { name, resource_group } => {
+                    let value = commands::network::private_dns::show_zone::execute(&client, &resource_group, &name).await?;
+                    output::print_output(&value, output_format, query)
+                }
+            }
         }
         PrivateDnsCommand::RecordSet { command } => {
             match command {
