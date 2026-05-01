@@ -265,6 +265,8 @@ enum VmCommand {
         name: String,
         #[arg(short = 'g', long)]
         resource_group: String,
+        #[arg(short = 'd', long = "show-details")]
+        show_details: bool,
     },
     Start {
         #[arg(short, long)]
@@ -2954,8 +2956,8 @@ async fn handle_vm(
             let value = commands::vm::list::execute(&client, resource_group.as_deref()).await?;
             output::print_output(&value, output_format, query)
         }
-        VmCommand::Show { name, resource_group } => {
-            let value = commands::vm::show::execute(&client, &resource_group, &name).await?;
+        VmCommand::Show { name, resource_group, show_details } => {
+            let value = commands::vm::show::execute(&client, &resource_group, &name, show_details).await?;
             output::print_output(&value, output_format, query)
         }
         VmCommand::Start { name, resource_group } => {

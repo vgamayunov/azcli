@@ -7,7 +7,7 @@ All 29 `az vm` top-level commands are implemented. Subgroups: [`vm disk`](manage
 | Command | Description |
 |---------|-------------|
 | `vm list [--resource-group RG]` | List VMs (all or by resource group) |
-| `vm show --name NAME --resource-group RG` | Show VM details with instance view |
+| `vm show --name NAME --resource-group RG [-d/--show-details]` | Show VM details with instance view. `-d` adds `powerState`, `publicIps`, `privateIps`, `fqdns` (parity with `az vm show -d`) |
 | `vm get-instance-view --name NAME --resource-group RG` | Get instance view (statuses, agent, disks) |
 | `vm list-ip-addresses [--name NAME] [--resource-group RG]` | List public and private IP addresses |
 | `vm list-sizes --location LOC` | List available VM sizes in a location |
