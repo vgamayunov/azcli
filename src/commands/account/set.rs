@@ -3,6 +3,25 @@ use anyhow::Result;
 use crate::auth::{list_subscriptions, token_provider::TokenProvider};
 
 pub async fn execute(provider: &mut TokenProvider, name_or_id: &str) -> Result<serde_json::Value> {
+    if let Some(cached) = provider.cache().find_by_selector(name_or_id) {
+        let sub_id = cached.subscription_id.clone();
+        let sub_name = cached.subscription_name.clone();
+        let tenant_id = cached.tenant_id.clone();
+        let profile = cached.profile.clone();
+        if let Some(ref sid) = sub_id {
+            let cache = provider.cache_mut();
+            cache.default_subscription = Some(sid.clone());
+            provider.save_cache()?;
+            return Ok(serde_json::json!({
+                "id": sid,
+                "name": sub_name,
+                "tenantId": tenant_id,
+                "profile": profile,
+                "isDefault": true,
+            }));
+        }
+    }
+
     let token = provider.get_access_token().await?;
     let subs = list_subscriptions(&token).await?;
 
@@ -35,6 +54,7 @@ pub async fn execute(provider: &mut TokenProvider, name_or_id: &str) -> Result<s
                 crate::auth::cache::CachedAccount {
                     subscription_id: Some(sub_id.clone()),
                     subscription_name: sub.display_name.clone(),
+                    profile: None,
                     tenant_id: sub.tenant_id.clone().unwrap_or(template.tenant_id),
                     access_token: None,
                     refresh_token: template.refresh_token,

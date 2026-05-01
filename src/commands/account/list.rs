@@ -39,6 +39,16 @@ pub async fn execute(provider: &mut TokenProvider) -> Result<serde_json::Value> 
 
     let active_default = provider.cache_default_subscription();
 
+    let profile_by_sub: HashMap<String, String> = provider
+        .cache()
+        .accounts
+        .iter()
+        .filter_map(|a| match (a.subscription_id.as_deref(), a.profile.as_deref()) {
+            (Some(sub), Some(name)) => Some((sub.to_string(), name.to_string())),
+            _ => None,
+        })
+        .collect();
+
     let tenant_map: HashMap<String, TenantInfo> = tenants
         .iter()
         .cloned()
@@ -91,6 +101,7 @@ pub async fn execute(provider: &mut TokenProvider) -> Result<serde_json::Value> 
                 &user_name,
                 user_type,
                 active_default.as_deref(),
+                &profile_by_sub,
             ));
         }
     }
@@ -112,6 +123,7 @@ fn render_subscription(
     user_name: &str,
     user_type: &str,
     active_default: Option<&str>,
+    profile_by_sub: &HashMap<String, String>,
 ) -> serde_json::Value {
     let sub_id = sub.id.rsplit('/').next().unwrap_or(&sub.id).to_string();
     let is_default = active_default == Some(&sub_id);
@@ -128,6 +140,7 @@ fn render_subscription(
         "isDefault": is_default,
         "managedByTenants": Vec::<serde_json::Value>::new(),
         "name": sub.display_name,
+        "profile": profile_by_sub.get(&sub_id),
         "state": sub.state,
         "tenantDefaultDomain": tenant_for_meta.default_domain,
         "tenantDisplayName": tenant_for_meta.display_name,

@@ -52,6 +52,7 @@ pub async fn login(
         tenant_id: tenant.to_string(),
         subscription_id: None,
         subscription_name: None,
+        profile: None,
         access_token: Some(token_resp.access_token),
         refresh_token: None,
         expires_at,

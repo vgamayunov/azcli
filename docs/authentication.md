@@ -24,6 +24,22 @@ azcli account show
 azcli logout
 ```
 
+## Named Profiles (Multi-Account)
+
+Tag a login with `--name` so it can be addressed by a friendly name later:
+
+```bash
+azcli login --name work
+azcli login --name personal --tenant <other-tenant-id>
+
+azcli --profile work vm list
+azcli --profile personal network bastion ssh ...
+azcli account list -o table             # shows the Profile column
+azcli account set work                  # set 'work' as default
+```
+
+`--profile <name>` and `--subscription <id|name|profile>` are mutually exclusive global flags. `--subscription` is polymorphic and also accepts profile names; `--profile` exists as an unambiguous alternative.
+
 ## Token Cache
 
 Tokens are cached at `~/.azure/azcli_tokens.json` with automatic refresh.

@@ -18,7 +18,7 @@ azcli account show -n 62118f5c-be37-400f-9f20-a8b77a2a7877
 
 Enumerate every subscription accessible to the signed-in identity across **all tenants** (parity with `az account list`). For each tenant returned by `https://management.azure.com/tenants`, azcli exchanges the cached refresh token for a per-tenant access token, lists subscriptions, and merges results. Tenants that fail token exchange (e.g. require fresh MFA) are skipped with a warning.
 
-Output schema matches `az account list` exactly: `cloudName`, `homeTenantId`, `id`, `isDefault`, `managedByTenants`, `name`, `state`, `tenantDefaultDomain`, `tenantDisplayName`, `tenantId`, `user.{name,type}`. The `user.name` field is decoded from the access-token JWT (`preferred_username`/`upn` claim); `user.type` is `"user"` for interactive flows and `"servicePrincipal"` for SP auth.
+Output schema matches `az account list` exactly: `cloudName`, `homeTenantId`, `id`, `isDefault`, `managedByTenants`, `name`, `state`, `tenantDefaultDomain`, `tenantDisplayName`, `tenantId`, `user.{name,type}`, plus a `profile` field populated from the local cache when the row corresponds to a named login. The `user.name` field is decoded from the access-token JWT (`preferred_username`/`upn` claim); `user.type` is `"user"` for interactive flows and `"servicePrincipal"` for SP auth.
 
 ```bash
 azcli account list -o table
@@ -27,11 +27,12 @@ azcli account list -o json | jq '.[] | select(.tenantDisplayName == "Microsoft")
 
 ### `azcli account set -n <name-or-id>`
 
-Change the default subscription. Accepts the subscription GUID, full ARM id (`/subscriptions/<guid>`), or display name. Updates the local cache; the next ARM call uses the new default.
+Change the default subscription. Accepts the subscription GUID, full ARM id (`/subscriptions/<guid>`), display name, or **profile name** (see [Authentication › Named Profiles](authentication.md#named-profiles-multi-account)). Updates the local cache; the next ARM call uses the new default.
 
 ```bash
 azcli account set -n 62118f5c-be37-400f-9f20-a8b77a2a7877
 azcli account set -n MySubscriptionName
+azcli account set -n work          # profile name set via 'azcli login --name work'
 ```
 
 ### `azcli account list-locations [--subscription-id <id>]`

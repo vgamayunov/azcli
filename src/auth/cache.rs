@@ -21,6 +21,9 @@ pub struct CachedAccount {
     pub subscription_id: Option<String>,
     pub subscription_name: Option<String>,
 
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<String>,
+
     pub access_token: Option<String>,
     pub refresh_token: Option<String>,
     pub expires_at: Option<DateTime<Utc>>,
@@ -92,6 +95,14 @@ impl TokenCache {
         } else {
             self.accounts.first()
         }
+    }
+
+    pub fn find_by_selector(&self, selector: &str) -> Option<&CachedAccount> {
+        self.accounts.iter().find(|a| {
+            a.profile.as_deref() == Some(selector)
+                || a.subscription_id.as_deref() == Some(selector)
+                || a.subscription_name.as_deref() == Some(selector)
+        })
     }
 
     pub fn active_account_mut(&mut self) -> Option<&mut CachedAccount> {

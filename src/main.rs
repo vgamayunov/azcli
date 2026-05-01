@@ -23,6 +23,9 @@ struct Cli {
     #[arg(long = "subscription", global = true)]
     subscription: Option<String>,
 
+    #[arg(long = "profile", global = true, conflicts_with = "subscription")]
+    profile: Option<String>,
+
     #[arg(long = "query", global = true)]
     query: Option<String>,
 
@@ -50,6 +53,9 @@ enum CliCommand {
 
         #[arg(long)]
         identity: bool,
+
+        #[arg(long = "name", help = "Save this login under a profile name (use with --profile <name> later)")]
+        profile_name: Option<String>,
     },
 
     Logout,
@@ -2679,7 +2685,7 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     let output_format = cli.output;
-    let subscription = cli.subscription;
+    let subscription = cli.profile.or(cli.subscription);
     let query = cli.query;
 
     match cli.command {
@@ -2690,6 +2696,7 @@ async fn main() -> anyhow::Result<()> {
             client_id,
             client_secret,
             identity,
+            profile_name,
         } => {
             let mut provider = auth::TokenProvider::load(subscription)?;
 
@@ -2714,6 +2721,11 @@ async fn main() -> anyhow::Result<()> {
                 provider.login_device_code(tenant.as_deref()).await?;
             } else {
                 provider.login_interactive(tenant.as_deref()).await?;
+            }
+
+            if let Some(name) = profile_name {
+                provider.set_active_profile_name(&name)?;
+                eprintln!("Saved as profile: {name}");
             }
 
             Ok(())

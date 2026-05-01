@@ -58,8 +58,26 @@ All commands support `-o/--output` with formats matching `az` CLI:
 | Flag | Description |
 |------|-------------|
 | `-o, --output` | Output format |
-| `--subscription` | Override subscription ID |
+| `--subscription` | Override subscription. Accepts subscription ID, display name, or profile name |
+| `--profile` | Select a named profile (mutually exclusive with `--subscription`) |
 | `--query` | JMESPath query string applied to the result before formatting (matches `az --query`) |
+
+### Multi-account profiles
+
+Each `azcli login` caches `(tenant, subscription, refresh_token)`. Tag a login with `--name` to address it later by a friendly name instead of a GUID — useful when juggling multiple tenants/subscriptions (e.g. running `network bastion ssh` against a different account than your default).
+
+```bash
+azcli login --name work
+azcli login --name personal --tenant <other-tenant-id>
+
+azcli account list -o table             # 'Profile' column shows your names
+azcli --profile work account show
+azcli --profile personal network bastion ssh --name bastion -g rg --target-resource-id <vm-id>
+
+azcli account set work                  # make 'work' the default
+```
+
+`--subscription` is polymorphic and accepts any of: subscription GUID, subscription display name, or profile name. `--profile` is provided as an explicit, unambiguous alternative.
 
 ### `--query` examples
 

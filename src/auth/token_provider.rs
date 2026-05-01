@@ -16,9 +16,15 @@ pub struct TokenProvider {
 impl TokenProvider {
     pub fn load(subscription_override: Option<String>) -> Result<Self> {
         let cache = TokenCache::load()?;
+        let resolved = subscription_override.as_deref().map(|sel| {
+            cache
+                .find_by_selector(sel)
+                .and_then(|a| a.subscription_id.clone())
+                .unwrap_or_else(|| sel.to_string())
+        });
         Ok(Self {
             cache,
-            subscription_override,
+            subscription_override: resolved,
         })
     }
 
@@ -37,6 +43,33 @@ impl TokenProvider {
     }
 
     pub fn save_cache(&self) -> Result<()> {
+        self.cache.save()
+    }
+
+    pub fn set_active_profile_name(&mut self, name: &str) -> Result<()> {
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            bail!("profile name cannot be empty");
+        }
+        let active_sub = self
+            .cache
+            .active_account()
+            .and_then(|a| a.subscription_id.clone());
+        for acct in self.cache.accounts.iter_mut() {
+            if acct.profile.as_deref() == Some(trimmed) {
+                acct.profile = None;
+            }
+        }
+        let target = match active_sub {
+            Some(sub) => self
+                .cache
+                .accounts
+                .iter_mut()
+                .find(|a| a.subscription_id.as_deref() == Some(sub.as_str())),
+            None => self.cache.accounts.first_mut(),
+        }
+        .context("no active account to name")?;
+        target.profile = Some(trimmed.to_string());
         self.cache.save()
     }
 
