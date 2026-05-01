@@ -465,6 +465,26 @@ fn pick_table_columns(sample: &serde_json::Value) -> Vec<String> {
         ];
     }
 
+    if obj.contains_key("vmId") && obj.contains_key("hardwareProfile") {
+        let mut cols = vec![
+            "name".to_string(),
+            "resourceGroup".to_string(),
+            "location".to_string(),
+            "hardwareProfile.vmSize".to_string(),
+        ];
+        if obj.contains_key("powerState") {
+            cols.push("powerState".to_string());
+        }
+        if obj.contains_key("publicIps") {
+            cols.push("publicIps".to_string());
+        }
+        if obj.contains_key("privateIps") {
+            cols.push("privateIps".to_string());
+        }
+        cols.push("provisioningState".to_string());
+        return cols;
+    }
+
     let preferred = [
         "name",
         "location",
