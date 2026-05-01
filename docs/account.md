@@ -25,6 +25,15 @@ azcli account list -o table
 azcli account list -o json | jq '.[] | select(.tenantDisplayName == "Microsoft")'
 ```
 
+### `azcli account list-profiles`
+
+List only the **named profiles** in the local cache (no ARM call). Output is one row per `azcli login --name <name>` registration with `profile`, `subscriptionId`, `subscriptionName`, `tenantId`, `authMethod`, `isDefault`, `tokenExpiresAt`.
+
+```bash
+azcli account list-profiles -o table
+azcli account list-profiles --query "[?isDefault].profile" -o tsv
+```
+
 ### `azcli account set -n <name-or-id>`
 
 Change the default subscription. Accepts the subscription GUID, full ARM id (`/subscriptions/<guid>`), display name, or **profile name** (see [Authentication › Named Profiles](authentication.md#named-profiles-multi-account)). Updates the local cache; the next ARM call uses the new default.

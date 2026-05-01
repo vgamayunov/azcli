@@ -144,6 +144,7 @@ enum AccountCommand {
         name: Option<String>,
     },
     List,
+    ListProfiles,
     Set {
         #[arg(short = 'n', long)]
         name: String,
@@ -2745,6 +2746,11 @@ async fn main() -> anyhow::Result<()> {
             AccountCommand::List => {
                 let mut provider = auth::TokenProvider::load(subscription)?;
                 let value = commands::account::list::execute(&mut provider).await?;
+                output::print_output(&value, output_format, query.as_deref())
+            }
+            AccountCommand::ListProfiles => {
+                let provider = auth::TokenProvider::load(subscription)?;
+                let value = commands::account::list_profiles::execute(&provider)?;
                 output::print_output(&value, output_format, query.as_deref())
             }
             AccountCommand::Set { name } => {
