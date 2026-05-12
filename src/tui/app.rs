@@ -11,6 +11,7 @@ pub enum View {
     ResourceGroups,
     ResourcesInGroup { rg: String },
     VmDetail { rg: String, name: String },
+    VmssDetail { rg: String, name: String },
     AccountPicker,
 }
 
@@ -32,6 +33,10 @@ pub enum Action {
     VmDeallocate,
     VmPowerOff,
     VmRestart,
+    VmssStart,
+    VmssDeallocate,
+    VmssPowerOff,
+    VmssRestart,
     ConfirmYes,
     ConfirmNo,
 }
@@ -63,10 +68,57 @@ impl VmOp {
     }
 }
 
+#[derive(Clone)]
+pub enum VmssOp {
+    Start,
+    Deallocate,
+    PowerOff,
+    Restart,
+}
+
+impl VmssOp {
+    pub fn label(&self) -> &'static str {
+        match self {
+            VmssOp::Start => "start ALL instances",
+            VmssOp::Deallocate => "deallocate ALL instances (release compute)",
+            VmssOp::PowerOff => "power off ALL instances (keep compute)",
+            VmssOp::Restart => "restart ALL instances",
+        }
+    }
+    pub fn verb_ing(&self) -> &'static str {
+        match self {
+            VmssOp::Start => "starting VMSS",
+            VmssOp::Deallocate => "deallocating VMSS",
+            VmssOp::PowerOff => "powering off VMSS",
+            VmssOp::Restart => "restarting VMSS",
+        }
+    }
+}
+
+pub enum PendingOp {
+    Vm(VmOp),
+    Vmss(VmssOp),
+}
+
 pub struct PendingConfirm {
-    pub op: VmOp,
+    pub op: PendingOp,
     pub rg: String,
     pub name: String,
+}
+
+impl PendingConfirm {
+    pub fn label(&self) -> &'static str {
+        match &self.op {
+            PendingOp::Vm(o) => o.label(),
+            PendingOp::Vmss(o) => o.label(),
+        }
+    }
+    pub fn verb_ing(&self) -> &'static str {
+        match &self.op {
+            PendingOp::Vm(o) => o.verb_ing(),
+            PendingOp::Vmss(o) => o.verb_ing(),
+        }
+    }
 }
 
 pub struct VmDetailState {
@@ -77,6 +129,18 @@ pub struct VmDetailState {
 
 impl VmDetailState {
     pub fn new() -> Self { Self { value: None, loading: true, error: None } }
+}
+
+pub struct VmssDetailState {
+    pub vmss: Option<serde_json::Value>,
+    pub instances: Vec<serde_json::Value>,
+    pub cursor: usize,
+    pub loading: bool,
+    pub error: Option<String>,
+}
+
+impl VmssDetailState {
+    pub fn new() -> Self { Self { vmss: None, instances: Vec::new(), cursor: 0, loading: true, error: None } }
 }
 
 pub struct ListState {
@@ -117,6 +181,7 @@ pub struct App {
     pub resource_list: ListState,
     pub subs_list: ListState,
     pub vm_detail: VmDetailState,
+    pub vmss_detail: VmssDetailState,
     pub pending_confirm: Option<PendingConfirm>,
     pub action_in_progress: Option<String>,
     pub help_visible: bool,
@@ -135,6 +200,7 @@ impl App {
             resource_list: ListState::new(),
             subs_list: ListState::new(),
             vm_detail: VmDetailState::new(),
+            vmss_detail: VmssDetailState::new(),
             pending_confirm: None,
             action_in_progress: None,
             help_visible: false,
@@ -163,6 +229,7 @@ impl App {
             View::ResourcesInGroup { .. } => Some(&mut self.resource_list),
             View::AccountPicker => Some(&mut self.subs_list),
             View::VmDetail { .. } => None,
+            View::VmssDetail { .. } => None,
         }
     }
 
@@ -203,6 +270,19 @@ impl App {
                     }
                 }
             }
+            FetchPayload::VmssDetail { rg, name, vmss, instances } => {
+                if let Some(View::VmssDetail { rg: cur_rg, name: cur_name }) = self.view_stack.last() {
+                    if *cur_rg == rg && *cur_name == name {
+                        self.vmss_detail.vmss = Some(vmss);
+                        self.vmss_detail.instances = instances;
+                        if self.vmss_detail.cursor >= self.vmss_detail.instances.len() {
+                            self.vmss_detail.cursor = 0;
+                        }
+                        self.vmss_detail.loading = false;
+                        self.vmss_detail.error = None;
+                    }
+                }
+            }
         }
     }
 
@@ -223,6 +303,10 @@ impl App {
             View::VmDetail { .. } => {
                 self.vm_detail.loading = false;
                 self.vm_detail.error = Some(msg);
+            }
+            View::VmssDetail { .. } => {
+                self.vmss_detail.loading = false;
+                self.vmss_detail.error = Some(msg);
             }
         }
     }
@@ -249,12 +333,12 @@ pub async fn handle_action(app: &mut App, action: Action, event_tx: &mpsc::Sende
 
     match action {
         Action::Quit => return true,
-        Action::Up => { if let Some(l) = app.current_list_mut() { l.move_by(-1); } }
-        Action::Down => { if let Some(l) = app.current_list_mut() { l.move_by(1); } }
+        Action::Up => up_action(app),
+        Action::Down => down_action(app),
         Action::PageUp => { if let Some(l) = app.current_list_mut() { l.move_by(-10); } }
         Action::PageDown => { if let Some(l) = app.current_list_mut() { l.move_by(10); } }
-        Action::Home => { if let Some(l) = app.current_list_mut() { l.cursor = 0; } }
-        Action::End => { if let Some(l) = app.current_list_mut() { if !l.items.is_empty() { l.cursor = l.items.len() - 1; } } }
+        Action::Home => home_action(app),
+        Action::End => end_action(app),
         Action::Enter => enter(app, event_tx),
         Action::Back => back(app),
         Action::Refresh => refresh(app, event_tx),
@@ -265,9 +349,49 @@ pub async fn handle_action(app: &mut App, action: Action, event_tx: &mpsc::Sende
         Action::VmDeallocate => request_vm_op(app, VmOp::Deallocate),
         Action::VmPowerOff => request_vm_op(app, VmOp::PowerOff),
         Action::VmRestart => request_vm_op(app, VmOp::Restart),
+        Action::VmssStart => request_vmss_op(app, VmssOp::Start),
+        Action::VmssDeallocate => request_vmss_op(app, VmssOp::Deallocate),
+        Action::VmssPowerOff => request_vmss_op(app, VmssOp::PowerOff),
+        Action::VmssRestart => request_vmss_op(app, VmssOp::Restart),
         Action::ConfirmYes | Action::ConfirmNo => {}
     }
     false
+}
+
+fn up_action(app: &mut App) {
+    if matches!(app.current_view(), View::VmssDetail { .. }) {
+        if app.vmss_detail.cursor > 0 { app.vmss_detail.cursor -= 1; }
+        return;
+    }
+    if let Some(l) = app.current_list_mut() { l.move_by(-1); }
+}
+
+fn down_action(app: &mut App) {
+    if matches!(app.current_view(), View::VmssDetail { .. }) {
+        if app.vmss_detail.cursor + 1 < app.vmss_detail.instances.len() {
+            app.vmss_detail.cursor += 1;
+        }
+        return;
+    }
+    if let Some(l) = app.current_list_mut() { l.move_by(1); }
+}
+
+fn home_action(app: &mut App) {
+    if matches!(app.current_view(), View::VmssDetail { .. }) {
+        app.vmss_detail.cursor = 0;
+        return;
+    }
+    if let Some(l) = app.current_list_mut() { l.cursor = 0; }
+}
+
+fn end_action(app: &mut App) {
+    if matches!(app.current_view(), View::VmssDetail { .. }) {
+        if !app.vmss_detail.instances.is_empty() {
+            app.vmss_detail.cursor = app.vmss_detail.instances.len() - 1;
+        }
+        return;
+    }
+    if let Some(l) = app.current_list_mut() { if !l.items.is_empty() { l.cursor = l.items.len() - 1; } }
 }
 
 fn enter(app: &mut App, event_tx: &mpsc::Sender<Event>) {
@@ -292,9 +416,14 @@ fn enter(app: &mut App, event_tx: &mpsc::Sender<Event>) {
                 app.vm_detail = VmDetailState::new();
                 app.push_view(View::VmDetail { rg: rg.clone(), name: name.clone() });
                 super::data::spawn_fetch_vm_detail(app, rg, name, event_tx.clone());
+            } else if ty.eq_ignore_ascii_case("Microsoft.Compute/virtualMachineScaleSets") {
+                app.vmss_detail = VmssDetailState::new();
+                app.push_view(View::VmssDetail { rg: rg.clone(), name: name.clone() });
+                super::data::spawn_fetch_vmss_detail(app, rg, name, event_tx.clone());
             }
         }
         View::VmDetail { .. } => {}
+        View::VmssDetail { .. } => {}
         View::AccountPicker => {}
     }
 }
@@ -303,6 +432,7 @@ fn back(app: &mut App) {
     match app.current_view() {
         View::AccountPicker => app.pop_view(),
         View::VmDetail { .. } => app.pop_view(),
+        View::VmssDetail { .. } => app.pop_view(),
         View::ResourcesInGroup { .. } => app.pop_view(),
         View::ResourceGroups => {}
     }
@@ -328,6 +458,13 @@ fn refresh(app: &mut App, event_tx: &mpsc::Sender<Event>) {
             app.vm_detail.error = None;
             super::data::spawn_fetch_vm_detail(app, rg, name, event_tx.clone());
         }
+        View::VmssDetail { rg, name } => {
+            let rg = rg.clone();
+            let name = name.clone();
+            app.vmss_detail.loading = true;
+            app.vmss_detail.error = None;
+            super::data::spawn_fetch_vmss_detail(app, rg, name, event_tx.clone());
+        }
         View::AccountPicker => {
             app.subs_list = ListState::new();
             super::data::spawn_fetch_subscriptions(app, event_tx.clone());
@@ -340,13 +477,24 @@ fn request_vm_op(app: &mut App, op: VmOp) {
         View::VmDetail { rg, name } => (rg.clone(), name.clone()),
         _ => return,
     };
-    app.pending_confirm = Some(PendingConfirm { op, rg, name });
+    app.pending_confirm = Some(PendingConfirm { op: PendingOp::Vm(op), rg, name });
+}
+
+fn request_vmss_op(app: &mut App, op: VmssOp) {
+    let (rg, name) = match app.current_view() {
+        View::VmssDetail { rg, name } => (rg.clone(), name.clone()),
+        _ => return,
+    };
+    app.pending_confirm = Some(PendingConfirm { op: PendingOp::Vmss(op), rg, name });
 }
 
 fn confirm_yes(app: &mut App, event_tx: &mpsc::Sender<Event>) {
     let Some(pc) = app.pending_confirm.take() else { return; };
-    app.action_in_progress = Some(format!("{} {}", pc.op.verb_ing(), pc.name));
-    super::data::spawn_vm_action(app, pc.op, pc.rg, pc.name, event_tx.clone());
+    app.action_in_progress = Some(format!("{} {}", pc.verb_ing(), pc.name));
+    match pc.op {
+        PendingOp::Vm(op) => super::data::spawn_vm_action(app, op, pc.rg, pc.name, event_tx.clone()),
+        PendingOp::Vmss(op) => super::data::spawn_vmss_action(app, op, pc.rg, pc.name, event_tx.clone()),
+    }
 }
 
 fn open_account_picker(app: &mut App, event_tx: &mpsc::Sender<Event>) {

@@ -44,6 +44,7 @@ fn render_header(f: &mut Frame, area: Rect, app: &App) {
         View::ResourceGroups => "Resource Groups".to_string(),
         View::ResourcesInGroup { rg } => format!("Resources / {rg}"),
         View::VmDetail { rg, name } => format!("VM / {rg} / {name}"),
+        View::VmssDetail { rg, name } => format!("VMSS / {rg} / {name}"),
         View::AccountPicker => "Switch Subscription".to_string(),
     };
 
@@ -67,6 +68,7 @@ fn render_body(f: &mut Frame, area: Rect, app: &App) {
         View::ResourceGroups => render_rg_list(f, area, &app.rg_list),
         View::ResourcesInGroup { .. } => render_resource_list(f, area, &app.resource_list),
         View::VmDetail { .. } => render_vm_detail(f, area, app),
+        View::VmssDetail { .. } => render_vmss_detail(f, area, app),
         View::AccountPicker => {}
     }
 }
@@ -141,8 +143,9 @@ fn render_resource_list(f: &mut Frame, area: Rect, list: &ListState) {
 fn render_footer(f: &mut Frame, area: Rect, app: &App) {
     let hints = match app.current_view() {
         View::ResourceGroups => "↑↓/jk move  Enter drill  r refresh  s switch-sub  ? help  q quit",
-        View::ResourcesInGroup { .. } => "↑↓/jk move  Enter (VM only)  Esc back  r refresh  s switch-sub  ? help",
+        View::ResourcesInGroup { .. } => "↑↓/jk move  Enter (VM/VMSS)  Esc back  r refresh  s switch-sub  ? help",
         View::VmDetail { .. } => "S start  D deallocate  O power-off  T restart  r refresh  Esc back  ? help",
+        View::VmssDetail { .. } => "↑↓/jk pick instance   S/D/O/T affect ALL  r refresh  Esc back  ? help",
         View::AccountPicker => "↑↓/jk move  Enter select  r refresh  Esc cancel",
     };
     let mut lines = vec![Line::from(Span::styled(hints, Style::default().fg(Color::DarkGray)))];
@@ -230,6 +233,158 @@ fn render_vm_detail(f: &mut Frame, area: Rect, app: &App) {
     f.render_widget(p, area);
 }
 
+fn render_vmss_detail(f: &mut Frame, area: Rect, app: &App) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(7), Constraint::Min(0)])
+        .split(area);
+
+    render_vmss_summary(f, chunks[0], app);
+    render_vmss_instance_table(f, chunks[1], app);
+}
+
+fn render_vmss_summary(f: &mut Frame, area: Rect, app: &App) {
+    let block = Block::default().borders(Borders::ALL).title("VMSS");
+    if app.vmss_detail.loading && app.vmss_detail.vmss.is_none() {
+        let p = Paragraph::new("Loading...").block(block);
+        f.render_widget(p, area);
+        return;
+    }
+    if let Some(err) = &app.vmss_detail.error {
+        let p = Paragraph::new(format!("Error: {err}")).block(block).wrap(Wrap { trim: false });
+        f.render_widget(p, area);
+        return;
+    }
+    let Some(vmss) = &app.vmss_detail.vmss else {
+        f.render_widget(block, area);
+        return;
+    };
+
+    let name = vmss.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let location = vmss.get("location").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let sku_name = vmss.pointer("/sku/name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let sku_tier = vmss.pointer("/sku/tier").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let capacity = vmss.pointer("/sku/capacity").and_then(|v| v.as_i64()).map(|c| c.to_string()).unwrap_or_default();
+    let provisioning = vmss.get("provisioningState").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let upgrade_mode = vmss.pointer("/upgradePolicy/mode").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let orchestration = vmss.get("orchestrationMode").and_then(|v| v.as_str()).unwrap_or("").to_string();
+
+    let field = |label: &'static str, val: String| -> Line<'static> {
+        Line::from(vec![
+            Span::styled(format!("{label:<14}"), Style::default().fg(Color::DarkGray)),
+            Span::raw(val),
+        ])
+    };
+
+    let lines = vec![
+        Line::from(Span::styled(name, Style::default().add_modifier(Modifier::BOLD))),
+        field("sku", format!("{sku_name}  ({sku_tier})  capacity={capacity}")),
+        field("location", location),
+        field("provisioning", provisioning),
+        field("upgradeMode", format!("{upgrade_mode}   orchestration={orchestration}")),
+    ];
+
+    let p = Paragraph::new(lines).block(block);
+    f.render_widget(p, area);
+}
+
+fn render_vmss_instance_table(f: &mut Frame, area: Rect, app: &App) {
+    let title = format!("Instances ({})", app.vmss_detail.instances.len());
+    let block = Block::default().borders(Borders::ALL).title(title);
+    if app.vmss_detail.loading && app.vmss_detail.instances.is_empty() {
+        let p = Paragraph::new("Loading...").block(block);
+        f.render_widget(p, area);
+        return;
+    }
+    if app.vmss_detail.instances.is_empty() {
+        let p = Paragraph::new("(no instances)").block(block);
+        f.render_widget(p, area);
+        return;
+    }
+
+    let items = &app.vmss_detail.instances;
+
+    let max_id = items.iter()
+        .map(|i| i.get("instanceId").and_then(|v| v.as_str()).unwrap_or("").chars().count())
+        .max().unwrap_or(0);
+    let max_name = items.iter()
+        .map(|i| i.get("name").and_then(|v| v.as_str()).unwrap_or("").chars().count())
+        .max().unwrap_or(0);
+    let any_latest = items.iter().any(|i| i.get("latestModelApplied").map(|v| !v.is_null()).unwrap_or(false));
+
+    let id_w = max_id.clamp(4, 18);
+    let name_w = max_name.clamp(10, 36);
+    let power_w = 14usize;
+    let prov_w = 14usize;
+    let latest_w = if any_latest { 4usize } else { 0 };
+
+    let capacity = area.height.saturating_sub(2) as usize;
+    let cursor = app.vmss_detail.cursor;
+    let start = cursor.saturating_sub(capacity / 2)
+        .min(items.len().saturating_sub(capacity).max(0));
+    let visible: Vec<(usize, &serde_json::Value)> = items.iter().enumerate().skip(start).take(capacity).collect();
+
+    let list_items: Vec<ListItem> = visible.iter().map(|(idx, inst)| {
+        let iid = inst.get("instanceId").and_then(|v| v.as_str()).unwrap_or("");
+        let iname = inst.get("name").and_then(|v| v.as_str()).unwrap_or("");
+        let prov = inst.get("provisioningState").and_then(|v| v.as_str()).unwrap_or("");
+        let latest = inst.get("latestModelApplied").and_then(|v| v.as_bool())
+            .map(|b| if b { "yes" } else { "no" })
+            .unwrap_or("");
+        let power = extract_power(inst);
+
+        let mut spans = vec![
+            Span::raw(pad(&fit(iid, id_w), id_w)),
+            Span::raw("  "),
+            Span::raw(pad(&fit(iname, name_w), name_w)),
+            Span::raw("  "),
+            power_span(&power, power_w),
+            Span::raw("  "),
+            Span::raw(pad(&fit(prov, prov_w), prov_w)),
+        ];
+        if latest_w > 0 {
+            spans.push(Span::raw("  "));
+            spans.push(Span::raw(pad(&fit(latest, latest_w), latest_w)));
+        }
+
+        let style = if *idx == cursor {
+            Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
+        ListItem::new(Line::from(spans)).style(style)
+    }).collect();
+
+    let widget = List::new(list_items).block(block);
+    f.render_widget(widget, area);
+}
+
+fn extract_power(inst: &serde_json::Value) -> String {
+    if let Some(statuses) = inst.pointer("/instanceView/statuses").and_then(|v| v.as_array()) {
+        for s in statuses {
+            if let Some(code) = s.get("code").and_then(|v| v.as_str()) {
+                if let Some(rest) = code.strip_prefix("PowerState/") {
+                    return rest.to_string();
+                }
+            }
+        }
+    }
+    String::new()
+}
+
+fn power_span<'a>(power: &str, width: usize) -> Span<'a> {
+    let text = if power.is_empty() { "-".to_string() } else { power.to_string() };
+    let padded = pad(&fit(&text, width), width);
+    let style = match power {
+        "running" => Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+        "stopped" | "deallocated" => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        "starting" | "stopping" | "deallocating" => Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        "" => Style::default().fg(Color::DarkGray),
+        _ => Style::default(),
+    };
+    Span::styled(padded, style)
+}
+
 fn render_account_picker(f: &mut Frame, area: Rect, app: &App) {
     let w = area.width.saturating_sub(8).max(60).min(120);
     let h = area.height.saturating_sub(4).max(8);
@@ -292,7 +447,7 @@ fn render_account_picker(f: &mut Frame, area: Rect, app: &App) {
 
 fn render_help(f: &mut Frame, area: Rect) {
     let w = 70u16.min(area.width.saturating_sub(4));
-    let h = 26u16.min(area.height.saturating_sub(4));
+    let h = 32u16.min(area.height.saturating_sub(4));
     let x = area.x + (area.width.saturating_sub(w)) / 2;
     let y = area.y + (area.height.saturating_sub(h)) / 2;
     let rect = Rect { x, y, width: w, height: h };
@@ -320,6 +475,12 @@ VM Detail view
   D           Deallocate (stop + release compute)
   O           Power off (stop, keep compute)
   T           Restart
+
+VMSS Detail view (ALL instances)
+  S           Start all instances
+  D           Deallocate all instances
+  O           Power off all instances
+  T           Restart all instances
 ";
     let p = Paragraph::new(body)
         .block(Block::default().borders(Borders::ALL).title(" Help "))
@@ -340,7 +501,7 @@ fn render_confirm(f: &mut Frame, area: Rect, pc: &PendingConfirm) {
         Line::from(""),
         Line::from(vec![
             Span::raw("  "),
-            Span::raw(format!("Confirm: {} ", pc.op.label())),
+            Span::raw(format!("Confirm: {} ", pc.label())),
             Span::styled(pc.name.clone(), Style::default().add_modifier(Modifier::BOLD)),
         ]),
         Line::from(""),

@@ -527,6 +527,23 @@ impl ArmClient {
         self.arm_list_paginated(url, "list VMSS instances").await
     }
 
+    pub async fn list_vmss_flex_instances(&self, resource_group: &str, vmss_id: &str) -> Result<Vec<serde_json::Value>> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/virtualMachines?api-version={}",
+            self.subscription_id, resource_group, COMPUTE_API_VERSION
+        );
+        let all: Vec<serde_json::Value> = self.arm_list_paginated(url, "list VMs in RG (for Flex VMSS)").await?;
+        let filtered: Vec<serde_json::Value> = all.into_iter()
+            .filter(|v| {
+                v.pointer("/properties/virtualMachineScaleSet/id")
+                    .and_then(|s| s.as_str())
+                    .map(|s| s.eq_ignore_ascii_case(vmss_id))
+                    .unwrap_or(false)
+            })
+            .collect();
+        Ok(filtered)
+    }
+
     pub async fn list_vmss_skus(&self, resource_group: &str, name: &str) -> Result<serde_json::Value> {
         let url = format!(
             "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/virtualMachineScaleSets/{}/skus?api-version={}",
@@ -575,6 +592,14 @@ impl ArmClient {
 
     pub async fn vmss_stop(&self, resource_group: &str, name: &str, instance_ids: Option<&[String]>) -> Result<()> {
         self.vmss_action(resource_group, name, "poweroff", instance_ids).await
+    }
+
+    pub async fn vmss_deallocate(&self, resource_group: &str, name: &str, instance_ids: Option<&[String]>) -> Result<()> {
+        self.vmss_action(resource_group, name, "deallocate", instance_ids).await
+    }
+
+    pub async fn vmss_restart(&self, resource_group: &str, name: &str, instance_ids: Option<&[String]>) -> Result<()> {
+        self.vmss_action(resource_group, name, "restart", instance_ids).await
     }
 
     pub async fn vmss_update_instances(&self, resource_group: &str, name: &str, instance_ids: &[String]) -> Result<()> {

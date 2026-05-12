@@ -15,4 +15,5 @@ pub enum FetchPayload {
     ResourcesInGroup { rg: String, items: Vec<serde_json::Value> },
     Subscriptions(Vec<serde_json::Value>),
     VmDetail { rg: String, name: String, value: serde_json::Value },
+    VmssDetail { rg: String, name: String, vmss: serde_json::Value, instances: Vec<serde_json::Value> },
 }

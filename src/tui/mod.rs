@@ -147,9 +147,16 @@ async fn event_loop(
             Event::ActionOk(msg) => {
                 app.action_in_progress = None;
                 app.status = msg;
-                if let app::View::VmDetail { rg, name } = app.current_view().clone() {
-                    app.vm_detail.loading = true;
-                    data::spawn_fetch_vm_detail(app, rg, name, event_tx.clone());
+                match app.current_view().clone() {
+                    app::View::VmDetail { rg, name } => {
+                        app.vm_detail.loading = true;
+                        data::spawn_fetch_vm_detail(app, rg, name, event_tx.clone());
+                    }
+                    app::View::VmssDetail { rg, name } => {
+                        app.vmss_detail.loading = true;
+                        data::spawn_fetch_vmss_detail(app, rg, name, event_tx.clone());
+                    }
+                    _ => {}
                 }
             }
             Event::ActionErr(msg) => {

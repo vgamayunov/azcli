@@ -50,6 +50,30 @@ pub fn dispatch(app: &App, key: KeyEvent) -> Option<Action> {
         };
     }
 
+    if matches!(app.current_view(), View::VmssDetail { .. }) {
+        return match (key.modifiers, key.code) {
+            (KeyModifiers::CONTROL, KeyCode::Char('c')) => Some(Action::Quit),
+            (_, KeyCode::Char('q')) => Some(Action::Quit),
+            (_, KeyCode::Esc) | (_, KeyCode::Backspace) | (_, KeyCode::Char('h')) | (_, KeyCode::Left) => Some(Action::Back),
+            (_, KeyCode::Up) | (_, KeyCode::Char('k')) => Some(Action::Up),
+            (_, KeyCode::Down) | (_, KeyCode::Char('j')) => Some(Action::Down),
+            (KeyModifiers::CONTROL, KeyCode::Char('u')) => Some(Action::PageUp),
+            (KeyModifiers::CONTROL, KeyCode::Char('d')) => Some(Action::PageDown),
+            (_, KeyCode::PageUp) => Some(Action::PageUp),
+            (_, KeyCode::PageDown) => Some(Action::PageDown),
+            (_, KeyCode::Home) | (_, KeyCode::Char('g')) => Some(Action::Home),
+            (_, KeyCode::End) | (_, KeyCode::Char('G')) => Some(Action::End),
+            (_, KeyCode::Char('r')) => Some(Action::Refresh),
+            (_, KeyCode::Char('S')) => Some(Action::VmssStart),
+            (_, KeyCode::Char('D')) => Some(Action::VmssDeallocate),
+            (_, KeyCode::Char('O')) => Some(Action::VmssPowerOff),
+            (_, KeyCode::Char('T')) => Some(Action::VmssRestart),
+            (_, KeyCode::Char('?')) | (_, KeyCode::F(1)) => Some(Action::ToggleHelp),
+            (_, KeyCode::Char('s')) => Some(Action::OpenAccountPicker),
+            _ => None,
+        };
+    }
+
     match (key.modifiers, key.code) {
         (KeyModifiers::CONTROL, KeyCode::Char('c')) => Some(Action::Quit),
         (_, KeyCode::Char('q')) => Some(Action::Quit),

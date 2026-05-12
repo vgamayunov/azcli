@@ -2,7 +2,7 @@ use tokio::sync::mpsc;
 
 use crate::auth::TokenProvider;
 
-use super::app::{App, View, VmOp};
+use super::app::{App, View, VmOp, VmssOp};
 use super::event::{Event, FetchPayload};
 
 pub fn spawn_fetch_current(app: &App, tx: mpsc::Sender<Event>) {
@@ -11,6 +11,7 @@ pub fn spawn_fetch_current(app: &App, tx: mpsc::Sender<Event>) {
         View::ResourcesInGroup { rg } => spawn_fetch_resources(app, rg.clone(), tx),
         View::AccountPicker => spawn_fetch_subscriptions(app, tx),
         View::VmDetail { rg, name } => spawn_fetch_vm_detail(app, rg.clone(), name.clone(), tx),
+        View::VmssDetail { rg, name } => spawn_fetch_vmss_detail(app, rg.clone(), name.clone(), tx),
     }
 }
 
@@ -71,6 +72,111 @@ pub fn spawn_vm_action(app: &App, op: VmOp, rg: String, name: String, tx: mpsc::
         match res {
             Ok(()) => {
                 let _ = tx.send(Event::ActionOk(format!("{} {} done", op.verb_ing(), name))).await;
+            }
+            Err(e) => {
+                let _ = tx.send(Event::ActionErr(format!("{} {} failed: {e:#}", op.verb_ing(), name))).await;
+            }
+        }
+    });
+}
+
+pub fn spawn_fetch_vmss_detail(app: &App, rg: String, name: String, tx: mpsc::Sender<Event>) {
+    let client = app.client.clone();
+    tokio::spawn(async move {
+        let vmss = match client.show_vmss(&rg, &name).await {
+            Ok(v) => v,
+            Err(e) => {
+                let _ = tx.send(Event::FetchErr(format!("{e:#}"))).await;
+                return;
+            }
+        };
+        let vmss_value = vmss.to_flattened_value();
+
+        let orchestration = vmss_value.get("orchestrationMode")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let vmss_id = vmss_value.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+
+        let instances_result: Result<Vec<serde_json::Value>, anyhow::Error> = if orchestration.eq_ignore_ascii_case("Flexible") {
+            match client.list_vmss_flex_instances(&rg, &vmss_id).await {
+                Ok(vms) => {
+                    let mut joinset = tokio::task::JoinSet::new();
+                    for vm in vms.into_iter() {
+                        let client = client.clone();
+                        let rg = rg.clone();
+                        joinset.spawn(async move {
+                            let vm_name = vm.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                            let iv = if vm_name.is_empty() {
+                                None
+                            } else {
+                                client.vm_get_instance_view(&rg, &vm_name).await.ok()
+                            };
+                            normalize_flex_instance(vm, iv)
+                        });
+                    }
+                    let mut out = Vec::new();
+                    while let Some(joined) = joinset.join_next().await {
+                        if let Ok(v) = joined { out.push(v); }
+                    }
+                    out.sort_by(|a, b| {
+                        a.get("name").and_then(|v| v.as_str()).unwrap_or("")
+                            .cmp(b.get("name").and_then(|v| v.as_str()).unwrap_or(""))
+                    });
+                    Ok(out)
+                }
+                Err(e) => Err(e),
+            }
+        } else {
+            client.list_vmss_instances(&rg, &name, Some("instanceView")).await
+                .map(|items| items.iter().map(|i| i.to_flattened_value()).collect())
+        };
+
+        match instances_result {
+            Ok(instances) => {
+                let _ = tx.send(Event::FetchOk(FetchPayload::VmssDetail {
+                    rg, name, vmss: vmss_value, instances,
+                })).await;
+            }
+            Err(e) => {
+                let _ = tx.send(Event::FetchErr(format!("{e:#}"))).await;
+            }
+        }
+    });
+}
+
+fn normalize_flex_instance(vm: serde_json::Value, instance_view: Option<serde_json::Value>) -> serde_json::Value {
+    let mut map = serde_json::Map::new();
+    let name = vm.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    map.insert("name".into(), serde_json::Value::String(name.clone()));
+    let inst_id = vm.pointer("/properties/instanceId")
+        .or_else(|| vm.get("instanceId"))
+        .and_then(|v| v.as_str())
+        .unwrap_or(&name)
+        .to_string();
+    map.insert("instanceId".into(), serde_json::Value::String(inst_id));
+
+    if let Some(prov) = vm.pointer("/properties/provisioningState").and_then(|v| v.as_str()) {
+        map.insert("provisioningState".into(), serde_json::Value::String(prov.to_string()));
+    }
+    if let Some(iv) = instance_view {
+        map.insert("instanceView".into(), iv);
+    }
+    map.insert("latestModelApplied".into(), serde_json::Value::Null);
+    serde_json::Value::Object(map)
+}
+
+pub fn spawn_vmss_action(app: &App, op: VmssOp, rg: String, name: String, tx: mpsc::Sender<Event>) {
+    let client = app.client.clone();
+    tokio::spawn(async move {
+        let res = match op {
+            VmssOp::Start => client.vmss_start(&rg, &name, None).await,
+            VmssOp::Deallocate => client.vmss_deallocate(&rg, &name, None).await,
+            VmssOp::PowerOff => client.vmss_stop(&rg, &name, None).await,
+            VmssOp::Restart => client.vmss_restart(&rg, &name, None).await,
+        };
+        match res {
+            Ok(()) => {
+                let _ = tx.send(Event::ActionOk(format!("{} {} accepted", op.verb_ing(), name))).await;
             }
             Err(e) => {
                 let _ = tx.send(Event::ActionErr(format!("{} {} failed: {e:#}", op.verb_ing(), name))).await;
