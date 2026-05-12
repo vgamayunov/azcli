@@ -2,7 +2,7 @@ use tokio::sync::mpsc;
 
 use crate::auth::TokenProvider;
 
-use super::app::{App, View, VmOp, VmssOp};
+use super::app::{App, View, VmOp, VmssOp, VmssScope};
 use super::event::{Event, FetchPayload};
 
 pub fn spawn_fetch_current(app: &App, tx: mpsc::Sender<Event>) {
@@ -12,6 +12,7 @@ pub fn spawn_fetch_current(app: &App, tx: mpsc::Sender<Event>) {
         View::AccountPicker => spawn_fetch_subscriptions(app, tx),
         View::VmDetail { rg, name } => spawn_fetch_vm_detail(app, rg.clone(), name.clone(), tx),
         View::VmssDetail { rg, name } => spawn_fetch_vmss_detail(app, rg.clone(), name.clone(), tx),
+        View::VmssInstanceDetail { rg, vmss, .. } => spawn_fetch_vmss_detail(app, rg.clone(), vmss.clone(), tx),
     }
 }
 
@@ -95,9 +96,10 @@ pub fn spawn_fetch_vmss_detail(app: &App, rg: String, name: String, tx: mpsc::Se
         let orchestration = vmss_value.get("orchestrationMode")
             .and_then(|v| v.as_str())
             .unwrap_or("");
+        let is_flex = orchestration.eq_ignore_ascii_case("Flexible");
         let vmss_id = vmss_value.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
 
-        let instances_result: Result<Vec<serde_json::Value>, anyhow::Error> = if orchestration.eq_ignore_ascii_case("Flexible") {
+        let instances_result: Result<Vec<serde_json::Value>, anyhow::Error> = if is_flex {
             match client.list_vmss_flex_instances(&rg, &vmss_id).await {
                 Ok(vms) => {
                     let mut joinset = tokio::task::JoinSet::new();
@@ -134,7 +136,7 @@ pub fn spawn_fetch_vmss_detail(app: &App, rg: String, name: String, tx: mpsc::Se
         match instances_result {
             Ok(instances) => {
                 let _ = tx.send(Event::FetchOk(FetchPayload::VmssDetail {
-                    rg, name, vmss: vmss_value, instances,
+                    rg, name, vmss: vmss_value, instances, is_flex,
                 })).await;
             }
             Err(e) => {
@@ -165,15 +167,61 @@ fn normalize_flex_instance(vm: serde_json::Value, instance_view: Option<serde_js
     serde_json::Value::Object(map)
 }
 
-pub fn spawn_vmss_action(app: &App, op: VmssOp, rg: String, name: String, tx: mpsc::Sender<Event>) {
+pub fn spawn_vmss_action(app: &App, op: VmssOp, scope: VmssScope, is_flex: bool, rg: String, name: String, tx: mpsc::Sender<Event>) {
     let client = app.client.clone();
     tokio::spawn(async move {
-        let res = match op {
-            VmssOp::Start => client.vmss_start(&rg, &name, None).await,
-            VmssOp::Deallocate => client.vmss_deallocate(&rg, &name, None).await,
-            VmssOp::PowerOff => client.vmss_stop(&rg, &name, None).await,
-            VmssOp::Restart => client.vmss_restart(&rg, &name, None).await,
+        let res = match (&scope, is_flex) {
+            (VmssScope::All, _) => {
+                match op {
+                    VmssOp::Start => client.vmss_start(&rg, &name, None).await,
+                    VmssOp::Deallocate => client.vmss_deallocate(&rg, &name, None).await,
+                    VmssOp::PowerOff => client.vmss_stop(&rg, &name, None).await,
+                    VmssOp::Restart => client.vmss_restart(&rg, &name, None).await,
+                }
+            }
+            (VmssScope::Selected(targets), false) => {
+                let instance_ids: Vec<String> = targets.iter().map(|t| t.instance_id.clone()).collect();
+                match op {
+                    VmssOp::Start => client.vmss_start(&rg, &name, Some(&instance_ids)).await,
+                    VmssOp::Deallocate => client.vmss_deallocate(&rg, &name, Some(&instance_ids)).await,
+                    VmssOp::PowerOff => client.vmss_stop(&rg, &name, Some(&instance_ids)).await,
+                    VmssOp::Restart => client.vmss_restart(&rg, &name, Some(&instance_ids)).await,
+                }
+            }
+            (VmssScope::Selected(targets), true) => {
+                let mut joinset = tokio::task::JoinSet::new();
+                for target in targets.iter().cloned() {
+                    let client = client.clone();
+                    let rg = rg.clone();
+                    let op = op.clone();
+                    joinset.spawn(async move {
+                        match op {
+                            VmssOp::Start => client.start_vm(&rg, &target.vm_name).await,
+                            VmssOp::Deallocate => client.stop_vm(&rg, &target.vm_name, true).await,
+                            VmssOp::PowerOff => client.stop_vm(&rg, &target.vm_name, false).await,
+                            VmssOp::Restart => client.vm_post_action(&rg, &target.vm_name, "restart").await,
+                        }.map_err(|e| (target.vm_name, e))
+                    });
+                }
+                let mut failures: Vec<String> = Vec::new();
+                while let Some(joined) = joinset.join_next().await {
+                    match joined {
+                        Ok(Ok(())) => {}
+                        Ok(Err((vm, e))) => failures.push(format!("{vm}: {e:#}")),
+                        Err(e) => failures.push(format!("join error: {e:#}")),
+                    }
+                }
+                if failures.is_empty() {
+                    Ok(())
+                } else {
+                    Err(anyhow::anyhow!("{} of {} instance ops failed:\n{}",
+                        failures.len(),
+                        match &scope { VmssScope::Selected(t) => t.len(), _ => 0 },
+                        failures.join("\n")))
+                }
+            }
         };
+
         match res {
             Ok(()) => {
                 let _ = tx.send(Event::ActionOk(format!("{} {} accepted", op.verb_ing(), name))).await;

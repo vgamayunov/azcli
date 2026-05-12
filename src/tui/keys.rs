@@ -50,6 +50,22 @@ pub fn dispatch(app: &App, key: KeyEvent) -> Option<Action> {
         };
     }
 
+    if matches!(app.current_view(), View::VmssInstanceDetail { .. }) {
+        return match (key.modifiers, key.code) {
+            (KeyModifiers::CONTROL, KeyCode::Char('c')) => Some(Action::Quit),
+            (_, KeyCode::Char('q')) => Some(Action::Quit),
+            (_, KeyCode::Esc) | (_, KeyCode::Backspace) | (_, KeyCode::Char('h')) | (_, KeyCode::Left) => Some(Action::Back),
+            (_, KeyCode::Char('r')) => Some(Action::Refresh),
+            (_, KeyCode::Char('S')) => Some(Action::VmStart),
+            (_, KeyCode::Char('D')) => Some(Action::VmDeallocate),
+            (_, KeyCode::Char('O')) => Some(Action::VmPowerOff),
+            (_, KeyCode::Char('T')) => Some(Action::VmRestart),
+            (_, KeyCode::Char('?')) | (_, KeyCode::F(1)) => Some(Action::ToggleHelp),
+            (_, KeyCode::Char('s')) => Some(Action::OpenAccountPicker),
+            _ => None,
+        };
+    }
+
     if matches!(app.current_view(), View::VmssDetail { .. }) {
         return match (key.modifiers, key.code) {
             (KeyModifiers::CONTROL, KeyCode::Char('c')) => Some(Action::Quit),
@@ -63,6 +79,9 @@ pub fn dispatch(app: &App, key: KeyEvent) -> Option<Action> {
             (_, KeyCode::PageDown) => Some(Action::PageDown),
             (_, KeyCode::Home) | (_, KeyCode::Char('g')) => Some(Action::Home),
             (_, KeyCode::End) | (_, KeyCode::Char('G')) => Some(Action::End),
+            (_, KeyCode::Enter) | (_, KeyCode::Char('l')) | (_, KeyCode::Right) => Some(Action::Enter),
+            (_, KeyCode::Char(' ')) => Some(Action::ToggleSelect),
+            (_, KeyCode::Char('a')) => Some(Action::ClearSelection),
             (_, KeyCode::Char('r')) => Some(Action::Refresh),
             (_, KeyCode::Char('S')) => Some(Action::VmssStart),
             (_, KeyCode::Char('D')) => Some(Action::VmssDeallocate),

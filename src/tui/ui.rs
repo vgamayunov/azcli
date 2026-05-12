@@ -45,6 +45,7 @@ fn render_header(f: &mut Frame, area: Rect, app: &App) {
         View::ResourcesInGroup { rg } => format!("Resources / {rg}"),
         View::VmDetail { rg, name } => format!("VM / {rg} / {name}"),
         View::VmssDetail { rg, name } => format!("VMSS / {rg} / {name}"),
+        View::VmssInstanceDetail { rg, vmss, instance_id } => format!("VMSS / {rg} / {vmss} / instance {instance_id}"),
         View::AccountPicker => "Switch Subscription".to_string(),
     };
 
@@ -69,6 +70,7 @@ fn render_body(f: &mut Frame, area: Rect, app: &App) {
         View::ResourcesInGroup { .. } => render_resource_list(f, area, &app.resource_list),
         View::VmDetail { .. } => render_vm_detail(f, area, app),
         View::VmssDetail { .. } => render_vmss_detail(f, area, app),
+        View::VmssInstanceDetail { .. } => render_vmss_instance_detail(f, area, app),
         View::AccountPicker => {}
     }
 }
@@ -142,11 +144,16 @@ fn render_resource_list(f: &mut Frame, area: Rect, list: &ListState) {
 
 fn render_footer(f: &mut Frame, area: Rect, app: &App) {
     let hints = match app.current_view() {
-        View::ResourceGroups => "↑↓/jk move  Enter drill  r refresh  s switch-sub  ? help  q quit",
-        View::ResourcesInGroup { .. } => "↑↓/jk move  Enter (VM/VMSS)  Esc back  r refresh  s switch-sub  ? help",
-        View::VmDetail { .. } => "S start  D deallocate  O power-off  T restart  r refresh  Esc back  ? help",
-        View::VmssDetail { .. } => "↑↓/jk pick instance   S/D/O/T affect ALL  r refresh  Esc back  ? help",
-        View::AccountPicker => "↑↓/jk move  Enter select  r refresh  Esc cancel",
+        View::ResourceGroups => "↑↓/jk move  Enter drill  r refresh  s switch-sub  ? help  q quit".to_string(),
+        View::ResourcesInGroup { .. } => "↑↓/jk move  Enter (VM/VMSS)  Esc back  r refresh  s switch-sub  ? help".to_string(),
+        View::VmDetail { .. } => "S start  D deallocate  O power-off  T restart  r refresh  Esc back  ? help".to_string(),
+        View::VmssDetail { .. } => {
+            let sel = app.vmss_detail.selected.len();
+            let scope = if sel == 0 { "ALL".to_string() } else { format!("{sel} selected") };
+            format!("↑↓/jk move  Space select  Enter instance  S/D/O/T → {scope}  Esc back  ? help")
+        }
+        View::VmssInstanceDetail { .. } => "S start  D deallocate  O power-off  T restart  r refresh  Esc back  ? help".to_string(),
+        View::AccountPicker => "↑↓/jk move  Enter select  r refresh  Esc cancel".to_string(),
     };
     let mut lines = vec![Line::from(Span::styled(hints, Style::default().fg(Color::DarkGray)))];
     if let Some(ref msg) = app.action_in_progress {
@@ -289,7 +296,12 @@ fn render_vmss_summary(f: &mut Frame, area: Rect, app: &App) {
 }
 
 fn render_vmss_instance_table(f: &mut Frame, area: Rect, app: &App) {
-    let title = format!("Instances ({})", app.vmss_detail.instances.len());
+    let n_sel = app.vmss_detail.selected.len();
+    let title = if n_sel > 0 {
+        format!("Instances ({} total, {} selected)", app.vmss_detail.instances.len(), n_sel)
+    } else {
+        format!("Instances ({})", app.vmss_detail.instances.len())
+    };
     let block = Block::default().borders(Borders::ALL).title(title);
     if app.vmss_detail.loading && app.vmss_detail.instances.is_empty() {
         let p = Paragraph::new("Loading...").block(block);
@@ -332,8 +344,16 @@ fn render_vmss_instance_table(f: &mut Frame, area: Rect, app: &App) {
             .map(|b| if b { "yes" } else { "no" })
             .unwrap_or("");
         let power = extract_power(inst);
+        let selected = app.vmss_detail.selected.contains(iid);
+
+        let marker = if selected {
+            Span::styled("● ", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD))
+        } else {
+            Span::raw("  ")
+        };
 
         let mut spans = vec![
+            marker,
             Span::raw(pad(&fit(iid, id_w), id_w)),
             Span::raw("  "),
             Span::raw(pad(&fit(iname, name_w), name_w)),
@@ -383,6 +403,76 @@ fn power_span<'a>(power: &str, width: usize) -> Span<'a> {
         _ => Style::default(),
     };
     Span::styled(padded, style)
+}
+
+fn render_vmss_instance_detail(f: &mut Frame, area: Rect, app: &App) {
+    let block = Block::default().borders(Borders::ALL).title("VMSS Instance");
+    if let Some(err) = &app.vmss_instance_detail.error {
+        let p = Paragraph::new(format!("Error: {err}")).block(block).wrap(Wrap { trim: false });
+        f.render_widget(p, area);
+        return;
+    }
+    let Some(inst) = &app.vmss_instance_detail.instance else {
+        let p = Paragraph::new("(no data)").block(block);
+        f.render_widget(p, area);
+        return;
+    };
+
+    let s = |key: &str| -> String {
+        inst.get(key).and_then(|v| v.as_str()).unwrap_or("").to_string()
+    };
+
+    let name = s("name");
+    let instance_id = s("instanceId");
+    let prov = s("provisioningState");
+    let power = extract_power(inst);
+
+    let power_disp = match power.as_str() {
+        "" => Span::styled("(unknown)", Style::default().fg(Color::DarkGray)),
+        "running" => Span::styled(power.clone(), Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+        "stopped" | "deallocated" => Span::styled(power.clone(), Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+        "starting" | "stopping" | "deallocating" => Span::styled(power.clone(), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        _ => Span::raw(power.clone()),
+    };
+
+    let field = |label: &'static str, val: String| -> Line<'static> {
+        Line::from(vec![
+            Span::styled(format!("{label:<14}"), Style::default().fg(Color::DarkGray)),
+            Span::raw(val),
+        ])
+    };
+
+    let mut lines: Vec<Line> = Vec::new();
+    lines.push(Line::from(Span::styled(name.clone(), Style::default().add_modifier(Modifier::BOLD))));
+    lines.push(field("instanceId", instance_id));
+    lines.push(Line::from(vec![
+        Span::styled(format!("{:<14}", "power"), Style::default().fg(Color::DarkGray)),
+        power_disp,
+    ]));
+    lines.push(field("provisioning", prov));
+    lines.push(Line::from(""));
+
+    if let Some(statuses) = inst.pointer("/instanceView/statuses").and_then(|v| v.as_array()) {
+        lines.push(Line::from(Span::styled("statuses", Style::default().add_modifier(Modifier::BOLD))));
+        for st in statuses {
+            let code = st.get("code").and_then(|v| v.as_str()).unwrap_or("");
+            let disp = st.get("displayStatus").and_then(|v| v.as_str()).unwrap_or("");
+            let level = st.get("level").and_then(|v| v.as_str()).unwrap_or("Info");
+            let color = match level {
+                "Error" => Color::Red,
+                "Warning" => Color::Yellow,
+                _ => Color::Reset,
+            };
+            lines.push(Line::from(vec![
+                Span::raw("  "),
+                Span::styled(format!("{code:<34}"), Style::default().fg(Color::DarkGray)),
+                Span::styled(disp.to_string(), Style::default().fg(color)),
+            ]));
+        }
+    }
+
+    let p = Paragraph::new(lines).block(block).wrap(Wrap { trim: false });
+    f.render_widget(p, area);
 }
 
 fn render_account_picker(f: &mut Frame, area: Rect, app: &App) {
@@ -447,7 +537,7 @@ fn render_account_picker(f: &mut Frame, area: Rect, app: &App) {
 
 fn render_help(f: &mut Frame, area: Rect) {
     let w = 70u16.min(area.width.saturating_sub(4));
-    let h = 32u16.min(area.height.saturating_sub(4));
+    let h = 38u16.min(area.height.saturating_sub(4));
     let x = area.x + (area.width.saturating_sub(w)) / 2;
     let y = area.y + (area.height.saturating_sub(h)) / 2;
     let rect = Rect { x, y, width: w, height: h };
@@ -462,7 +552,7 @@ Navigation
   G / End     Last row
   Ctrl-u/d    Page up / down
   Enter / l   Drill into selection
-  Esc / h     Go back
+  Esc / h     Go back (clears selection first if any)
 
 Actions
   r           Refresh current view
@@ -476,11 +566,15 @@ VM Detail view
   O           Power off (stop, keep compute)
   T           Restart
 
-VMSS Detail view (ALL instances)
-  S           Start all instances
-  D           Deallocate all instances
-  O           Power off all instances
-  T           Restart all instances
+VMSS Detail view
+  Space       Toggle instance selection
+  a           Clear selection
+  Enter       Open instance detail
+  S D O T     Start / Deallocate / PowerOff / Restart
+              → selected if any, else ALL instances
+
+VMSS Instance Detail view
+  S D O T     Same as VM Detail, on this single instance
 ";
     let p = Paragraph::new(body)
         .block(Block::default().borders(Borders::ALL).title(" Help "))

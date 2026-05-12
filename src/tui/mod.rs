@@ -156,6 +156,10 @@ async fn event_loop(
                         app.vmss_detail.loading = true;
                         data::spawn_fetch_vmss_detail(app, rg, name, event_tx.clone());
                     }
+                    app::View::VmssInstanceDetail { rg, vmss, .. } => {
+                        app.vmss_detail.loading = true;
+                        data::spawn_fetch_vmss_detail(app, rg, vmss, event_tx.clone());
+                    }
                     _ => {}
                 }
             }
