@@ -23,20 +23,24 @@ pub async fn login(tenant: Option<&str>) -> Result<CachedAccount> {
 
     let state = uuid::Uuid::new_v4().to_string();
 
-    let auth_url = format!(
-        "{}?client_id={}&response_type=code&redirect_uri={}&scope={}&state={}&code_challenge={}&code_challenge_method=S256&prompt=select_account",
-        authorize_endpoint(tenant),
-        AZURE_CLI_CLIENT_ID,
-        urlencoding(&redirect_uri),
-        urlencoding(MANAGEMENT_SCOPE),
-        urlencoding(&state),
-        urlencoding(&code_challenge),
-    );
+    let mut auth_url = url::Url::parse(&authorize_endpoint(tenant))
+        .context("Failed to parse authorize endpoint URL")?;
+    auth_url
+        .query_pairs_mut()
+        .append_pair("client_id", AZURE_CLI_CLIENT_ID)
+        .append_pair("response_type", "code")
+        .append_pair("redirect_uri", &redirect_uri)
+        .append_pair("scope", MANAGEMENT_SCOPE)
+        .append_pair("state", &state)
+        .append_pair("code_challenge", &code_challenge)
+        .append_pair("code_challenge_method", "S256")
+        .append_pair("prompt", "select_account");
+    let auth_url = auth_url.to_string();
 
     eprintln!("Opening browser for login...");
     eprintln!("If the browser does not open, visit:\n{auth_url}");
 
-    if open::that(&auth_url).is_err() {
+    if !open_browser(&auth_url) {
         eprintln!("Failed to open browser automatically.");
     }
 
@@ -169,6 +173,31 @@ fn rand_byte() -> u8 {
     v.as_bytes()[0]
 }
 
-fn urlencoding(s: &str) -> String {
-    url::form_urlencoded::byte_serialize(s.as_bytes()).collect()
+fn is_wsl() -> bool {
+    if std::env::var_os("WSL_DISTRO_NAME").is_some() {
+        return true;
+    }
+    if let Ok(s) = std::fs::read_to_string("/proc/sys/kernel/osrelease") {
+        let lower = s.to_lowercase();
+        return lower.contains("microsoft") || lower.contains("wsl");
+    }
+    false
+}
+
+fn open_browser(url: &str) -> bool {
+    if is_wsl() {
+        debug!("WSL detected, using powershell.exe Start-Process to launch Windows browser");
+        let escaped = url.replace('\'', "''");
+        let ps_cmd = format!("Start-Process '{escaped}'");
+        let status = std::process::Command::new("powershell.exe")
+            .args(["-NoProfile", "-NonInteractive", "-Command", &ps_cmd])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+        if matches!(status, Ok(s) if s.success()) {
+            return true;
+        }
+        debug!("powershell.exe launch failed, falling back to open crate");
+    }
+    open::that(url).is_ok()
 }

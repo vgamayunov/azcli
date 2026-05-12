@@ -24,6 +24,16 @@ azcli account show
 azcli logout
 ```
 
+## WSL2 Notes
+
+`azcli login` detects WSL (via `WSL_DISTRO_NAME` and `/proc/sys/kernel/osrelease`) and launches the Windows-side default browser via `powershell.exe -NoProfile -NonInteractive -Command "Start-Process '<url>'"`. No `wslu`/`wslview` package required, and unlike `cmd.exe /c start` this avoids the WSL UNC current-directory issue and the `&`-in-URL quoting trap. Windows then redirects to `http://localhost:<random-port>` and WSL2's built-in localhost forwarding delivers it back to azcli.
+
+If Windows firewall blocks the loopback redirect (rare), use device-code flow instead:
+
+```bash
+azcli login --use-device-code
+```
+
 ## Named Profiles (Multi-Account)
 
 Tag a login with `--name` so it can be addressed by a friendly name later:
