@@ -144,6 +144,18 @@ async fn event_loop(
             Event::Tick => {}
             Event::FetchOk(payload) => app.apply_fetch(payload),
             Event::FetchErr(err) => app.apply_error(err),
+            Event::ActionOk(msg) => {
+                app.action_in_progress = None;
+                app.status = msg;
+                if let app::View::VmDetail { rg, name } = app.current_view().clone() {
+                    app.vm_detail.loading = true;
+                    data::spawn_fetch_vm_detail(app, rg, name, event_tx.clone());
+                }
+            }
+            Event::ActionErr(msg) => {
+                app.action_in_progress = None;
+                app.status = msg;
+            }
         }
     }
 }

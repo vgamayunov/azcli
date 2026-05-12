@@ -4,7 +4,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 
-use super::app::{App, ListState, View};
+use super::app::{App, ListState, PendingConfirm, View};
 
 pub fn render(f: &mut Frame, app: &App) {
     let area = f.area();
@@ -25,6 +25,10 @@ pub fn render(f: &mut Frame, app: &App) {
         render_account_picker(f, area, app);
     }
 
+    if let Some(ref pc) = app.pending_confirm {
+        render_confirm(f, area, pc);
+    }
+
     if app.help_visible {
         render_help(f, area);
     }
@@ -39,6 +43,7 @@ fn render_header(f: &mut Frame, area: Rect, app: &App) {
     let view_label = match app.current_view() {
         View::ResourceGroups => "Resource Groups".to_string(),
         View::ResourcesInGroup { rg } => format!("Resources / {rg}"),
+        View::VmDetail { rg, name } => format!("VM / {rg} / {name}"),
         View::AccountPicker => "Switch Subscription".to_string(),
     };
 
@@ -61,6 +66,7 @@ fn render_body(f: &mut Frame, area: Rect, app: &App) {
     match app.current_view() {
         View::ResourceGroups => render_rg_list(f, area, &app.rg_list),
         View::ResourcesInGroup { .. } => render_resource_list(f, area, &app.resource_list),
+        View::VmDetail { .. } => render_vm_detail(f, area, app),
         View::AccountPicker => {}
     }
 }
@@ -135,14 +141,92 @@ fn render_resource_list(f: &mut Frame, area: Rect, list: &ListState) {
 fn render_footer(f: &mut Frame, area: Rect, app: &App) {
     let hints = match app.current_view() {
         View::ResourceGroups => "↑↓/jk move  Enter drill  r refresh  s switch-sub  ? help  q quit",
-        View::ResourcesInGroup { .. } => "↑↓/jk move  Esc/h back  r refresh  s switch-sub  ? help  q quit",
+        View::ResourcesInGroup { .. } => "↑↓/jk move  Enter (VM only)  Esc back  r refresh  s switch-sub  ? help",
+        View::VmDetail { .. } => "S start  D deallocate  O power-off  T restart  r refresh  Esc back  ? help",
         View::AccountPicker => "↑↓/jk move  Enter select  r refresh  Esc cancel",
     };
     let mut lines = vec![Line::from(Span::styled(hints, Style::default().fg(Color::DarkGray)))];
-    if !app.status.is_empty() {
+    if let Some(ref msg) = app.action_in_progress {
+        lines.push(Line::from(Span::styled(format!("⏳ {msg}..."), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))));
+    } else if !app.status.is_empty() {
         lines.push(Line::from(Span::styled(app.status.clone(), Style::default().fg(Color::Yellow))));
     }
     let p = Paragraph::new(lines).block(Block::default().borders(Borders::TOP));
+    f.render_widget(p, area);
+}
+
+fn render_vm_detail(f: &mut Frame, area: Rect, app: &App) {
+    let block = Block::default().borders(Borders::ALL).title("VM");
+    if app.vm_detail.loading && app.vm_detail.value.is_none() {
+        let p = Paragraph::new("Loading...").block(block);
+        f.render_widget(p, area);
+        return;
+    }
+    if let Some(err) = &app.vm_detail.error {
+        let p = Paragraph::new(format!("Error: {err}")).block(block).wrap(Wrap { trim: false });
+        f.render_widget(p, area);
+        return;
+    }
+    let Some(value) = &app.vm_detail.value else {
+        f.render_widget(block, area);
+        return;
+    };
+
+    let s = |key: &str| -> String {
+        value.get(key).and_then(|v| v.as_str()).unwrap_or("").to_string()
+    };
+
+    let power = s("powerState");
+    let power_span = match power.as_str() {
+        "running" => Span::styled(power.clone(), Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+        "stopped" | "deallocated" => Span::styled(power.clone(), Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+        "starting" | "stopping" | "deallocating" => Span::styled(power.clone(), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        _ if power.is_empty() => Span::styled("(unknown)", Style::default().fg(Color::DarkGray)),
+        _ => Span::raw(power.clone()),
+    };
+
+    let field = |label: &'static str, val: String| -> Line<'static> {
+        Line::from(vec![
+            Span::styled(format!("{label:<14}"), Style::default().fg(Color::DarkGray)),
+            Span::raw(val),
+        ])
+    };
+
+    let mut lines: Vec<Line> = Vec::new();
+    lines.push(Line::from(vec![
+        Span::styled(format!("{:<14}", "power"), Style::default().fg(Color::DarkGray)),
+        power_span,
+    ]));
+    lines.push(field("name", s("name")));
+    lines.push(field("vmSize", s("vmSize")));
+    lines.push(field("location", s("location")));
+    lines.push(field("osType", s("osType")));
+    lines.push(field("provisioning", s("provisioningState")));
+    lines.push(field("privateIps", s("privateIps")));
+    lines.push(field("publicIps", s("publicIps")));
+    lines.push(field("fqdns", s("fqdns")));
+    lines.push(Line::from(""));
+
+    if let Some(statuses) = value.pointer("/instanceView/statuses").and_then(|v| v.as_array()) {
+        lines.push(Line::from(Span::styled("statuses", Style::default().add_modifier(Modifier::BOLD))));
+        for st in statuses {
+            let code = st.get("code").and_then(|v| v.as_str()).unwrap_or("");
+            let disp = st.get("displayStatus").and_then(|v| v.as_str()).unwrap_or("");
+            let level = st.get("level").and_then(|v| v.as_str()).unwrap_or("Info");
+            let color = match level {
+                "Error" => Color::Red,
+                "Warning" => Color::Yellow,
+                _ => Color::Reset,
+            };
+            lines.push(Line::from(vec![
+                Span::raw("  "),
+                Span::styled(format!("{code:<34}"), Style::default().fg(Color::DarkGray)),
+                Span::styled(disp.to_string(), Style::default().fg(color)),
+            ]));
+        }
+    }
+
+    let p = Paragraph::new(lines).block(block).wrap(Wrap { trim: false });
     f.render_widget(p, area);
 }
 
@@ -208,7 +292,7 @@ fn render_account_picker(f: &mut Frame, area: Rect, app: &App) {
 
 fn render_help(f: &mut Frame, area: Rect) {
     let w = 70u16.min(area.width.saturating_sub(4));
-    let h = 18u16.min(area.height.saturating_sub(4));
+    let h = 26u16.min(area.height.saturating_sub(4));
     let x = area.x + (area.width.saturating_sub(w)) / 2;
     let y = area.y + (area.height.saturating_sub(h)) / 2;
     let rect = Rect { x, y, width: w, height: h };
@@ -227,13 +311,46 @@ Navigation
 
 Actions
   r           Refresh current view
-  s           Switch account
+  s           Switch subscription
   ?  F1       Toggle this help
   q  Ctrl-C   Quit
+
+VM Detail view
+  S           Start
+  D           Deallocate (stop + release compute)
+  O           Power off (stop, keep compute)
+  T           Restart
 ";
     let p = Paragraph::new(body)
         .block(Block::default().borders(Borders::ALL).title(" Help "))
         .wrap(Wrap { trim: false });
+    f.render_widget(p, rect);
+}
+
+fn render_confirm(f: &mut Frame, area: Rect, pc: &PendingConfirm) {
+    let w = 64u16.min(area.width.saturating_sub(4));
+    let h = 7u16.min(area.height.saturating_sub(4));
+    let x = area.x + (area.width.saturating_sub(w)) / 2;
+    let y = area.y + (area.height.saturating_sub(h)) / 2;
+    let rect = Rect { x, y, width: w, height: h };
+
+    f.render_widget(Clear, rect);
+
+    let body = vec![
+        Line::from(""),
+        Line::from(vec![
+            Span::raw("  "),
+            Span::raw(format!("Confirm: {} ", pc.op.label())),
+            Span::styled(pc.name.clone(), Style::default().add_modifier(Modifier::BOLD)),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled("  Press [y] to confirm, anything else to cancel",
+            Style::default().fg(Color::DarkGray))),
+    ];
+
+    let p = Paragraph::new(body)
+        .block(Block::default().borders(Borders::ALL).title(Span::styled(" Confirm ",
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))));
     f.render_widget(p, rect);
 }
 

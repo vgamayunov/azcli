@@ -6,9 +6,11 @@ use crate::auth::cache::CachedAccount;
 
 use super::event::{Event, FetchPayload};
 
+#[derive(Clone)]
 pub enum View {
     ResourceGroups,
     ResourcesInGroup { rg: String },
+    VmDetail { rg: String, name: String },
     AccountPicker,
 }
 
@@ -26,6 +28,55 @@ pub enum Action {
     OpenAccountPicker,
     SelectAccount,
     ToggleHelp,
+    VmStart,
+    VmDeallocate,
+    VmPowerOff,
+    VmRestart,
+    ConfirmYes,
+    ConfirmNo,
+}
+
+#[derive(Clone)]
+pub enum VmOp {
+    Start,
+    Deallocate,
+    PowerOff,
+    Restart,
+}
+
+impl VmOp {
+    pub fn label(&self) -> &'static str {
+        match self {
+            VmOp::Start => "start",
+            VmOp::Deallocate => "deallocate (stop + release compute)",
+            VmOp::PowerOff => "power off (stop, keep compute)",
+            VmOp::Restart => "restart",
+        }
+    }
+    pub fn verb_ing(&self) -> &'static str {
+        match self {
+            VmOp::Start => "starting",
+            VmOp::Deallocate => "deallocating",
+            VmOp::PowerOff => "powering off",
+            VmOp::Restart => "restarting",
+        }
+    }
+}
+
+pub struct PendingConfirm {
+    pub op: VmOp,
+    pub rg: String,
+    pub name: String,
+}
+
+pub struct VmDetailState {
+    pub value: Option<serde_json::Value>,
+    pub loading: bool,
+    pub error: Option<String>,
+}
+
+impl VmDetailState {
+    pub fn new() -> Self { Self { value: None, loading: true, error: None } }
 }
 
 pub struct ListState {
@@ -65,6 +116,9 @@ pub struct App {
     pub rg_list: ListState,
     pub resource_list: ListState,
     pub subs_list: ListState,
+    pub vm_detail: VmDetailState,
+    pub pending_confirm: Option<PendingConfirm>,
+    pub action_in_progress: Option<String>,
     pub help_visible: bool,
     pub status: String,
     pub log_modal: Option<String>,
@@ -80,6 +134,9 @@ impl App {
             rg_list: ListState::new(),
             resource_list: ListState::new(),
             subs_list: ListState::new(),
+            vm_detail: VmDetailState::new(),
+            pending_confirm: None,
+            action_in_progress: None,
             help_visible: false,
             status: String::new(),
             log_modal: None,
@@ -105,6 +162,7 @@ impl App {
             View::ResourceGroups => Some(&mut self.rg_list),
             View::ResourcesInGroup { .. } => Some(&mut self.resource_list),
             View::AccountPicker => Some(&mut self.subs_list),
+            View::VmDetail { .. } => None,
         }
     }
 
@@ -136,6 +194,15 @@ impl App {
                     .position(|v| v.get("id").and_then(|s| s.as_str()) == Some(&self.subscription_id))
                     .unwrap_or(0);
             }
+            FetchPayload::VmDetail { rg, name, value } => {
+                if let Some(View::VmDetail { rg: cur_rg, name: cur_name }) = self.view_stack.last() {
+                    if *cur_rg == rg && *cur_name == name {
+                        self.vm_detail.value = Some(value);
+                        self.vm_detail.loading = false;
+                        self.vm_detail.error = None;
+                    }
+                }
+            }
         }
     }
 
@@ -153,6 +220,10 @@ impl App {
                 self.subs_list.loading = false;
                 self.subs_list.error = Some(msg);
             }
+            View::VmDetail { .. } => {
+                self.vm_detail.loading = false;
+                self.vm_detail.error = Some(msg);
+            }
         }
     }
 
@@ -163,6 +234,19 @@ impl App {
 }
 
 pub async fn handle_action(app: &mut App, action: Action, event_tx: &mpsc::Sender<Event>) -> bool {
+    if app.action_in_progress.is_some() {
+        return false;
+    }
+
+    if app.pending_confirm.is_some() {
+        match action {
+            Action::ConfirmYes => confirm_yes(app, event_tx),
+            Action::ConfirmNo | Action::Back | Action::Quit => { app.pending_confirm = None; }
+            _ => {}
+        }
+        return false;
+    }
+
     match action {
         Action::Quit => return true,
         Action::Up => { if let Some(l) = app.current_list_mut() { l.move_by(-1); } }
@@ -177,6 +261,11 @@ pub async fn handle_action(app: &mut App, action: Action, event_tx: &mpsc::Sende
         Action::OpenAccountPicker => open_account_picker(app, event_tx),
         Action::SelectAccount => select_account(app, event_tx).await,
         Action::ToggleHelp => app.help_visible = !app.help_visible,
+        Action::VmStart => request_vm_op(app, VmOp::Start),
+        Action::VmDeallocate => request_vm_op(app, VmOp::Deallocate),
+        Action::VmPowerOff => request_vm_op(app, VmOp::PowerOff),
+        Action::VmRestart => request_vm_op(app, VmOp::Restart),
+        Action::ConfirmYes | Action::ConfirmNo => {}
     }
     false
 }
@@ -191,7 +280,21 @@ fn enter(app: &mut App, event_tx: &mpsc::Sender<Event>) {
             app.push_view(View::ResourcesInGroup { rg: rg.clone() });
             super::data::spawn_fetch_resources(app, rg, event_tx.clone());
         }
-        View::ResourcesInGroup { .. } => {}
+        View::ResourcesInGroup { rg } => {
+            let rg = rg.clone();
+            let Some(sel) = app.resource_list.selected() else { return; };
+            let ty = sel.get("type").and_then(|v| v.as_str()).unwrap_or("");
+            let name = match sel.get("name").and_then(|v| v.as_str()) {
+                Some(n) => n.to_string(),
+                None => return,
+            };
+            if ty.eq_ignore_ascii_case("Microsoft.Compute/virtualMachines") {
+                app.vm_detail = VmDetailState::new();
+                app.push_view(View::VmDetail { rg: rg.clone(), name: name.clone() });
+                super::data::spawn_fetch_vm_detail(app, rg, name, event_tx.clone());
+            }
+        }
+        View::VmDetail { .. } => {}
         View::AccountPicker => {}
     }
 }
@@ -199,6 +302,7 @@ fn enter(app: &mut App, event_tx: &mpsc::Sender<Event>) {
 fn back(app: &mut App) {
     match app.current_view() {
         View::AccountPicker => app.pop_view(),
+        View::VmDetail { .. } => app.pop_view(),
         View::ResourcesInGroup { .. } => app.pop_view(),
         View::ResourceGroups => {}
     }
@@ -217,11 +321,32 @@ fn refresh(app: &mut App, event_tx: &mpsc::Sender<Event>) {
             app.resource_list.error = None;
             super::data::spawn_fetch_resources(app, rg, event_tx.clone());
         }
+        View::VmDetail { rg, name } => {
+            let rg = rg.clone();
+            let name = name.clone();
+            app.vm_detail.loading = true;
+            app.vm_detail.error = None;
+            super::data::spawn_fetch_vm_detail(app, rg, name, event_tx.clone());
+        }
         View::AccountPicker => {
             app.subs_list = ListState::new();
             super::data::spawn_fetch_subscriptions(app, event_tx.clone());
         }
     }
+}
+
+fn request_vm_op(app: &mut App, op: VmOp) {
+    let (rg, name) = match app.current_view() {
+        View::VmDetail { rg, name } => (rg.clone(), name.clone()),
+        _ => return,
+    };
+    app.pending_confirm = Some(PendingConfirm { op, rg, name });
+}
+
+fn confirm_yes(app: &mut App, event_tx: &mpsc::Sender<Event>) {
+    let Some(pc) = app.pending_confirm.take() else { return; };
+    app.action_in_progress = Some(format!("{} {}", pc.op.verb_ing(), pc.name));
+    super::data::spawn_vm_action(app, pc.op, pc.rg, pc.name, event_tx.clone());
 }
 
 fn open_account_picker(app: &mut App, event_tx: &mpsc::Sender<Event>) {
