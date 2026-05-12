@@ -3,6 +3,7 @@ use crossterm::event::KeyEvent;
 pub enum Event {
     Key(KeyEvent),
     Resize,
+    Tick,
     FetchOk(FetchPayload),
     FetchErr(String),
 }

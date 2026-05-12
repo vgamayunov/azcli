@@ -136,6 +136,7 @@ dependencies = [
  "crossterm 0.29.0",
  "dirs",
  "jmespath",
+ "libc",
  "open",
  "ratatui 0.30.0",
  "reqwest",

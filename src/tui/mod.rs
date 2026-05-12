@@ -2,6 +2,7 @@ mod app;
 mod data;
 mod event;
 mod keys;
+mod stderr_capture;
 mod ui;
 
 use std::io::IsTerminal;
@@ -17,6 +18,7 @@ use crate::auth::TokenProvider;
 
 use app::{App, View};
 use event::Event;
+use stderr_capture::StderrCapture;
 
 pub async fn run(subscription_override: Option<String>) -> Result<()> {
     if !std::io::stdout().is_terminal() {
@@ -36,6 +38,9 @@ pub async fn run(subscription_override: Option<String>) -> Result<()> {
         .context("Failed to resolve subscription")?;
 
     let client = ArmClient::new(token, sub_id.clone());
+
+    let stderr_capture = StderrCapture::install()
+        .context("Failed to install stderr capture")?;
 
     let (event_tx, mut event_rx) = mpsc::channel::<Event>(64);
     let stop = Arc::new(AtomicBool::new(false));
@@ -74,12 +79,31 @@ pub async fn run(subscription_override: Option<String>) -> Result<()> {
     app.push_view(View::ResourceGroups);
     data::spawn_fetch_current(&app, event_tx.clone());
 
+    let tick_tx = event_tx.clone();
+    let tick_stop = stop.clone();
+    let tick_handle = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_millis(150));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            interval.tick().await;
+            if tick_stop.load(Ordering::Relaxed) { return; }
+            if tick_tx.send(Event::Tick).await.is_err() { return; }
+        }
+    });
+
     let mut terminal = ratatui::init();
-    let result = event_loop(&mut terminal, &mut app, &mut event_rx, &event_tx).await;
+    let result = event_loop(&mut terminal, &mut app, &mut event_rx, &event_tx, &stderr_capture).await;
     ratatui::restore();
 
     stop.store(true, Ordering::Relaxed);
     let _ = key_handle.await;
+    tick_handle.abort();
+
+    if let Some(leftover) = stderr_capture.take() {
+        eprint!("{leftover}");
+    }
+    drop(stderr_capture);
+
     result
 }
 
@@ -88,8 +112,15 @@ async fn event_loop(
     app: &mut App,
     event_rx: &mut mpsc::Receiver<Event>,
     event_tx: &mpsc::Sender<Event>,
+    stderr_capture: &StderrCapture,
 ) -> Result<()> {
     loop {
+        if app.log_modal.is_none() && stderr_capture.peek_nonempty() {
+            if let Some(text) = stderr_capture.take() {
+                app.log_modal = Some(text);
+            }
+        }
+
         terminal.draw(|f| ui::render(f, app)).context("draw failed")?;
 
         let event = match event_rx.recv().await {
@@ -99,6 +130,10 @@ async fn event_loop(
 
         match event {
             Event::Key(key) => {
+                if app.log_modal.is_some() {
+                    app.log_modal = None;
+                    continue;
+                }
                 if let Some(action) = keys::dispatch(app, key) {
                     if app::handle_action(app, action, event_tx).await {
                         return Ok(());
@@ -106,6 +141,7 @@ async fn event_loop(
                 }
             }
             Event::Resize => {}
+            Event::Tick => {}
             Event::FetchOk(payload) => app.apply_fetch(payload),
             Event::FetchErr(err) => app.apply_error(err),
         }

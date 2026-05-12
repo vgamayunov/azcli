@@ -64,7 +64,8 @@ jmespath = "0.5"
 ratatui = { version = "0.30", optional = true }
 crossterm = { version = "0.29", optional = true }
 tui-input = { version = "0.14", optional = true }
+libc = { version = "0.2", optional = true }
 
 [features]
 default = ["tui"]
-tui = ["dep:ratatui", "dep:crossterm", "dep:tui-input"]
+tui = ["dep:ratatui", "dep:crossterm", "dep:tui-input", "dep:libc"]

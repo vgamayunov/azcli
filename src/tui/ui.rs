@@ -28,6 +28,10 @@ pub fn render(f: &mut Frame, app: &App) {
     if app.help_visible {
         render_help(f, area);
     }
+
+    if let Some(ref text) = app.log_modal {
+        render_log_modal(f, area, text);
+    }
 }
 
 fn render_header(f: &mut Frame, area: Rect, app: &App) {
@@ -229,6 +233,34 @@ Actions
 ";
     let p = Paragraph::new(body)
         .block(Block::default().borders(Borders::ALL).title(" Help "))
+        .wrap(Wrap { trim: false });
+    f.render_widget(p, rect);
+}
+
+fn render_log_modal(f: &mut Frame, area: Rect, text: &str) {
+    let w = area.width.saturating_sub(4).max(40);
+    let h = area.height.saturating_sub(4).max(8);
+    let x = area.x + (area.width.saturating_sub(w)) / 2;
+    let y = area.y + (area.height.saturating_sub(h)) / 2;
+    let rect = Rect { x, y, width: w, height: h };
+
+    f.render_widget(Clear, rect);
+
+    let trimmed = text.trim_end();
+    let max_lines = rect.height.saturating_sub(3) as usize;
+    let lines: Vec<&str> = trimmed.lines().collect();
+    let shown: Vec<&str> = if lines.len() > max_lines {
+        lines[lines.len() - max_lines..].to_vec()
+    } else {
+        lines
+    };
+    let body = shown.join("\n");
+
+    let p = Paragraph::new(body)
+        .block(Block::default()
+            .borders(Borders::ALL)
+            .title(Span::styled(" Captured stderr (press any key to dismiss) ",
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))))
         .wrap(Wrap { trim: false });
     f.render_widget(p, rect);
 }

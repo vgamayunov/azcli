@@ -67,6 +67,7 @@ pub struct App {
     pub subs_list: ListState,
     pub help_visible: bool,
     pub status: String,
+    pub log_modal: Option<String>,
 }
 
 impl App {
@@ -81,6 +82,7 @@ impl App {
             subs_list: ListState::new(),
             help_visible: false,
             status: String::new(),
+            log_modal: None,
         }
     }
 
