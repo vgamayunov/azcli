@@ -34,6 +34,7 @@ pub enum Action {
     ToggleHelp,
     ToggleSelect,
     ClearSelection,
+    CycleSort,
     VmStart,
     VmDeallocate,
     VmPowerOff,
@@ -47,6 +48,51 @@ pub enum Action {
     VmssOpenCapacity,
     ConfirmYes,
     ConfirmNo,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ResourceSort {
+    Name,
+    Type,
+    Location,
+}
+
+impl ResourceSort {
+    pub fn next(self) -> Self {
+        match self {
+            ResourceSort::Name => ResourceSort::Type,
+            ResourceSort::Type => ResourceSort::Location,
+            ResourceSort::Location => ResourceSort::Name,
+        }
+    }
+    pub fn label(self) -> &'static str {
+        match self {
+            ResourceSort::Name => "name",
+            ResourceSort::Type => "type",
+            ResourceSort::Location => "location",
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum RgSort {
+    Name,
+    Location,
+}
+
+impl RgSort {
+    pub fn next(self) -> Self {
+        match self {
+            RgSort::Name => RgSort::Location,
+            RgSort::Location => RgSort::Name,
+        }
+    }
+    pub fn label(self) -> &'static str {
+        match self {
+            RgSort::Name => "name",
+            RgSort::Location => "location",
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -249,7 +295,9 @@ pub struct App {
     pub subscription_id: String,
     pub view_stack: Vec<View>,
     pub rg_list: ListState,
+    pub rg_sort: RgSort,
     pub resource_list: ListState,
+    pub resource_sort: ResourceSort,
     pub subs_list: ListState,
     pub vm_detail: VmDetailState,
     pub vmss_detail: VmssDetailState,
@@ -270,7 +318,9 @@ impl App {
             subscription_id,
             view_stack: Vec::new(),
             rg_list: ListState::new(),
+            rg_sort: RgSort::Name,
             resource_list: ListState::new(),
+            resource_sort: ResourceSort::Name,
             subs_list: ListState::new(),
             vm_detail: VmDetailState::new(),
             vmss_detail: VmssDetailState::new(),
@@ -313,6 +363,7 @@ impl App {
         match payload {
             FetchPayload::ResourceGroups(items) => {
                 self.rg_list.items = items;
+                sort_rgs(&mut self.rg_list.items, self.rg_sort);
                 self.rg_list.loading = false;
                 self.rg_list.error = None;
                 if self.rg_list.cursor >= self.rg_list.items.len() {
@@ -323,6 +374,7 @@ impl App {
                 if let Some(View::ResourcesInGroup { rg: cur }) = self.view_stack.last() {
                     if *cur == rg {
                         self.resource_list.items = items;
+                        sort_resources(&mut self.resource_list.items, self.resource_sort);
                         self.resource_list.loading = false;
                         self.resource_list.error = None;
                         self.resource_list.cursor = 0;
@@ -442,6 +494,7 @@ pub async fn handle_action(app: &mut App, action: Action, event_tx: &mpsc::Sende
         Action::ToggleHelp => app.help_visible = !app.help_visible,
         Action::ToggleSelect => toggle_select(app),
         Action::ClearSelection => app.vmss_detail.selected.clear(),
+        Action::CycleSort => cycle_sort(app),
         Action::VmStart => request_vm_op_current(app, VmOp::Start),
         Action::VmDeallocate => request_vm_op_current(app, VmOp::Deallocate),
         Action::VmPowerOff => request_vm_op_current(app, VmOp::PowerOff),
@@ -506,6 +559,60 @@ fn toggle_select(app: &mut App) {
     if !app.vmss_detail.selected.remove(&id) {
         app.vmss_detail.selected.insert(id);
     }
+}
+
+fn cycle_resource_sort(app: &mut App) {
+    if !matches!(app.current_view(), View::ResourcesInGroup { .. }) { return; }
+    app.resource_sort = app.resource_sort.next();
+    sort_resources(&mut app.resource_list.items, app.resource_sort);
+    app.resource_list.cursor = 0;
+}
+
+fn cycle_sort(app: &mut App) {
+    match app.current_view() {
+        View::ResourceGroups => {
+            app.rg_sort = app.rg_sort.next();
+            sort_rgs(&mut app.rg_list.items, app.rg_sort);
+            app.rg_list.cursor = 0;
+        }
+        View::ResourcesInGroup { .. } => cycle_resource_sort(app),
+        _ => {}
+    }
+}
+
+pub fn sort_rgs(items: &mut [serde_json::Value], key: RgSort) {
+    let field = match key {
+        RgSort::Name => "name",
+        RgSort::Location => "location",
+    };
+    items.sort_by(|a, b| {
+        let av = a.get(field).and_then(|v| v.as_str()).unwrap_or("");
+        let bv = b.get(field).and_then(|v| v.as_str()).unwrap_or("");
+        av.to_ascii_lowercase().cmp(&bv.to_ascii_lowercase())
+            .then_with(|| {
+                let aname = a.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                let bname = b.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                aname.cmp(bname)
+            })
+    });
+}
+
+pub fn sort_resources(items: &mut [serde_json::Value], key: ResourceSort) {
+    let field = match key {
+        ResourceSort::Name => "name",
+        ResourceSort::Type => "type",
+        ResourceSort::Location => "location",
+    };
+    items.sort_by(|a, b| {
+        let av = a.get(field).and_then(|v| v.as_str()).unwrap_or("");
+        let bv = b.get(field).and_then(|v| v.as_str()).unwrap_or("");
+        av.to_ascii_lowercase().cmp(&bv.to_ascii_lowercase())
+            .then_with(|| {
+                let aname = a.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                let bname = b.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                aname.cmp(bname)
+            })
+    });
 }
 
 fn up_action(app: &mut App) {

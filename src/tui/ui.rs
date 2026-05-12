@@ -4,7 +4,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 
-use super::app::{App, CapacityPrompt, ListState, PendingConfirm, View};
+use super::app::{App, CapacityPrompt, ListState, PendingConfirm, ResourceSort, RgSort, View};
 
 pub fn render(f: &mut Frame, app: &App) {
     let area = f.area();
@@ -70,8 +70,8 @@ fn render_header(f: &mut Frame, area: Rect, app: &App) {
 
 fn render_body(f: &mut Frame, area: Rect, app: &App) {
     match app.current_view() {
-        View::ResourceGroups => render_rg_list(f, area, &app.rg_list),
-        View::ResourcesInGroup { .. } => render_resource_list(f, area, &app.resource_list),
+        View::ResourceGroups => render_rg_list(f, area, &app.rg_list, app.rg_sort),
+        View::ResourcesInGroup { .. } => render_resource_list(f, area, &app.resource_list, app.resource_sort),
         View::VmDetail { .. } => render_vm_detail(f, area, app),
         View::VmssDetail { .. } => render_vmss_detail(f, area, app),
         View::VmssInstanceDetail { .. } => render_vmss_instance_detail(f, area, app),
@@ -79,7 +79,7 @@ fn render_body(f: &mut Frame, area: Rect, app: &App) {
     }
 }
 
-fn render_rg_list(f: &mut Frame, area: Rect, list: &ListState) {
+fn render_rg_list(f: &mut Frame, area: Rect, list: &ListState, sort: RgSort) {
     if let Some(msg) = status_line(list) {
         let p = Paragraph::new(msg).block(Block::default().borders(Borders::ALL).title("Resource Groups"));
         f.render_widget(p, area);
@@ -104,12 +104,12 @@ fn render_rg_list(f: &mut Frame, area: Rect, list: &ListState) {
         ListItem::new(line).style(style)
     }).collect();
 
-    let title = format!("Resource Groups ({})", list.items.len());
+    let title = format!("Resource Groups ({})  [sort: {}]", list.items.len(), sort.label());
     let widget = List::new(items).block(Block::default().borders(Borders::ALL).title(title));
     f.render_widget(widget, area);
 }
 
-fn render_resource_list(f: &mut Frame, area: Rect, list: &ListState) {
+fn render_resource_list(f: &mut Frame, area: Rect, list: &ListState, sort: ResourceSort) {
     if let Some(msg) = status_line(list) {
         let p = Paragraph::new(msg).block(Block::default().borders(Borders::ALL).title("Resources"));
         f.render_widget(p, area);
@@ -141,15 +141,21 @@ fn render_resource_list(f: &mut Frame, area: Rect, list: &ListState) {
         ListItem::new(line).style(style)
     }).collect();
 
-    let title = format!("Resources ({})", list.items.len());
+    let title = format!("Resources ({})  [sort: {}]", list.items.len(), sort.label());
     let widget = List::new(items).block(Block::default().borders(Borders::ALL).title(title));
     f.render_widget(widget, area);
 }
 
 fn render_footer(f: &mut Frame, area: Rect, app: &App) {
     let hints = match app.current_view() {
-        View::ResourceGroups => "↑↓/jk move  Enter drill  r refresh  s switch-sub  ? help  q quit".to_string(),
-        View::ResourcesInGroup { .. } => "↑↓/jk move  Enter (VM/VMSS)  Esc back  r refresh  s switch-sub  ? help".to_string(),
+        View::ResourceGroups => format!(
+            "↑↓/jk move  Enter drill  r refresh  o sort: {}  s switch-sub  ? help  q quit",
+            app.rg_sort.label()
+        ),
+        View::ResourcesInGroup { .. } => format!(
+            "↑↓/jk move  Enter (VM/VMSS)  Esc back  r refresh  o sort: {}  s switch-sub  ? help",
+            app.resource_sort.label()
+        ),
         View::VmDetail { .. } => "S start  D deallocate  O power-off  T restart  r refresh  Esc back  ? help".to_string(),
         View::VmssDetail { .. } => {
             let sel = app.vmss_detail.selected.len();
@@ -561,6 +567,9 @@ Navigation
 
 Actions
   r           Refresh current view
+  o           Cycle sort
+              · RGs:       name → location
+              · Resources: name → type → location
   s           Switch subscription
   ?  F1       Toggle this help
   q  Ctrl-C   Quit

@@ -110,6 +110,7 @@ pub fn dispatch(app: &App, key: KeyEvent) -> Option<Action> {
         (_, KeyCode::Enter) | (_, KeyCode::Char('l')) | (_, KeyCode::Right) => Some(Action::Enter),
         (_, KeyCode::Esc) | (_, KeyCode::Backspace) | (_, KeyCode::Char('h')) | (_, KeyCode::Left) => Some(Action::Back),
         (_, KeyCode::Char('r')) => Some(Action::Refresh),
+        (_, KeyCode::Char('o')) => Some(Action::CycleSort),
         (_, KeyCode::Char('s')) => Some(Action::OpenAccountPicker),
         (_, KeyCode::Char('?')) | (_, KeyCode::F(1)) => Some(Action::ToggleHelp),
         _ => None,
