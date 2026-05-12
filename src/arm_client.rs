@@ -48,6 +48,14 @@ impl ArmClient {
         self.arm_list_paginated(url, "list resource groups").await
     }
 
+    pub async fn list_resources_in_group(&self, resource_group: &str) -> Result<Vec<serde_json::Value>> {
+        let url = format!(
+            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/resources?api-version={}",
+            self.subscription_id, resource_group, RESOURCE_GROUP_API_VERSION
+        );
+        self.arm_list_paginated(url, "list resources in group").await
+    }
+
     pub async fn show_resource_group(&self, name: &str) -> Result<ResourceGroup> {
         let url = format!(
             "https://management.azure.com/subscriptions/{}/resourcegroups/{}?api-version={}",

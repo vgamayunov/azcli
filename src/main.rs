@@ -5,6 +5,8 @@ mod commands;
 mod models;
 mod output;
 mod tunnel;
+#[cfg(feature = "tui")]
+mod tui;
 
 use clap::{Parser, Subcommand};
 use models::{AuthType, BastionSku, OutputFormat};
@@ -135,6 +137,9 @@ enum CliCommand {
         #[arg(long)]
         output_file: Option<String>,
     },
+
+    #[cfg(feature = "tui")]
+    Tui,
 }
 
 #[derive(Subcommand)]
@@ -2911,6 +2916,11 @@ async fn main() -> anyhow::Result<()> {
             } else {
                 output::print_output(&value, output_format, query.as_deref())
             }
+        }
+
+        #[cfg(feature = "tui")]
+        CliCommand::Tui => {
+            tui::run(subscription).await
         }
     }
 }

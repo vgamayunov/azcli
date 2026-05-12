@@ -5,6 +5,7 @@ A fast Rust implementation of the Azure CLI with native OAuth2 authentication, A
 ## What's here that `az` doesn't have
 
 - **Native Bastion SSH / RDP / tunnel** — built-in WebSocket client; no `az ssh` extension, no native-client install, no Python.
+- **`azcli tui` — k9s-style resource browser** — interactive read-only browser over resource groups and resources, with a built-in subscription/tenant picker that matches `azcli account list -o table`. Single keystroke to switch sub. (Phase 1, read-only.)
 - **Named login profiles** — tag any login with `azcli login --name work`, then `--profile work` (or `--profile personal`) on any command. Each profile is a full `(tenant, subscription, refresh_token)` triple; no more juggling GUIDs across tenants.
 - **Polymorphic `--subscription`** — accepts subscription GUID, display name, *or* profile name. `--profile` is the unambiguous alias.
 - **PIM activate / deactivate as first-class commands** — `azcli role pim activate ...` works without extensions or hand-rolled REST calls.
@@ -48,6 +49,7 @@ azcli group list -o table
 | [`role definition`](docs/role.md#role-definition) | Read | 2 | List, show |
 | [`role pim`](docs/pim.md) | **NEW** | 4 | List, status, activate, deactivate PIM role assignments |
 | [`rest`](docs/rest.md) | Full | 1 | Arbitrary ARM API requests |
+| `tui` | **NEW** | 1 | k9s-style interactive resource browser (Phase 1: read-only RG/resource view + subscription switcher) |
 
 ## Output Formats
 
