@@ -69,6 +69,7 @@ pub fn spawn_vm_action(app: &App, op: VmOp, rg: String, name: String, tx: mpsc::
             VmOp::Deallocate => client.stop_vm(&rg, &name, true).await,
             VmOp::PowerOff => client.stop_vm(&rg, &name, false).await,
             VmOp::Restart => client.vm_post_action(&rg, &name, "restart").await,
+            VmOp::Delete => client.vm_delete(&rg, &name, false).await,
         };
         match res {
             Ok(()) => {
@@ -177,6 +178,7 @@ pub fn spawn_vmss_action(app: &App, op: VmssOp, scope: VmssScope, is_flex: bool,
                     VmssOp::Deallocate => client.vmss_deallocate(&rg, &name, None).await,
                     VmssOp::PowerOff => client.vmss_stop(&rg, &name, None).await,
                     VmssOp::Restart => client.vmss_restart(&rg, &name, None).await,
+                    VmssOp::Delete => Err(anyhow::anyhow!("delete with scope=ALL is not allowed via TUI")),
                 }
             }
             (VmssScope::Selected(targets), false) => {
@@ -186,6 +188,7 @@ pub fn spawn_vmss_action(app: &App, op: VmssOp, scope: VmssScope, is_flex: bool,
                     VmssOp::Deallocate => client.vmss_deallocate(&rg, &name, Some(&instance_ids)).await,
                     VmssOp::PowerOff => client.vmss_stop(&rg, &name, Some(&instance_ids)).await,
                     VmssOp::Restart => client.vmss_restart(&rg, &name, Some(&instance_ids)).await,
+                    VmssOp::Delete => client.vmss_delete_instances(&rg, &name, &instance_ids).await,
                 }
             }
             (VmssScope::Selected(targets), true) => {
@@ -200,6 +203,7 @@ pub fn spawn_vmss_action(app: &App, op: VmssOp, scope: VmssScope, is_flex: bool,
                             VmssOp::Deallocate => client.stop_vm(&rg, &target.vm_name, true).await,
                             VmssOp::PowerOff => client.stop_vm(&rg, &target.vm_name, false).await,
                             VmssOp::Restart => client.vm_post_action(&rg, &target.vm_name, "restart").await,
+                            VmssOp::Delete => client.vm_delete(&rg, &target.vm_name, false).await,
                         }.map_err(|e| (target.vm_name, e))
                     });
                 }
@@ -228,6 +232,20 @@ pub fn spawn_vmss_action(app: &App, op: VmssOp, scope: VmssScope, is_flex: bool,
             }
             Err(e) => {
                 let _ = tx.send(Event::ActionErr(format!("{} {} failed: {e:#}", op.verb_ing(), name))).await;
+            }
+        }
+    });
+}
+
+pub fn spawn_vmss_scale(app: &App, rg: String, name: String, capacity: i64, tx: mpsc::Sender<Event>) {
+    let client = app.client.clone();
+    tokio::spawn(async move {
+        match client.vmss_scale(&rg, &name, capacity).await {
+            Ok(()) => {
+                let _ = tx.send(Event::ActionOk(format!("scaling {name} to capacity {capacity} accepted"))).await;
+            }
+            Err(e) => {
+                let _ = tx.send(Event::ActionErr(format!("scaling {name} failed: {e:#}"))).await;
             }
         }
     });

@@ -38,10 +38,13 @@ pub enum Action {
     VmDeallocate,
     VmPowerOff,
     VmRestart,
+    VmDelete,
     VmssStart,
     VmssDeallocate,
     VmssPowerOff,
     VmssRestart,
+    VmssDelete,
+    VmssOpenCapacity,
     ConfirmYes,
     ConfirmNo,
 }
@@ -52,6 +55,7 @@ pub enum VmOp {
     Deallocate,
     PowerOff,
     Restart,
+    Delete,
 }
 
 impl VmOp {
@@ -61,6 +65,7 @@ impl VmOp {
             VmOp::Deallocate => "deallocate (stop + release compute)",
             VmOp::PowerOff => "power off (stop, keep compute)",
             VmOp::Restart => "restart",
+            VmOp::Delete => "DELETE",
         }
     }
     pub fn label_short(&self) -> &'static str {
@@ -69,6 +74,7 @@ impl VmOp {
             VmOp::Deallocate => "deallocate",
             VmOp::PowerOff => "power off",
             VmOp::Restart => "restart",
+            VmOp::Delete => "DELETE",
         }
     }
     pub fn verb_ing(&self) -> &'static str {
@@ -77,6 +83,7 @@ impl VmOp {
             VmOp::Deallocate => "deallocating",
             VmOp::PowerOff => "powering off",
             VmOp::Restart => "restarting",
+            VmOp::Delete => "deleting",
         }
     }
 }
@@ -87,6 +94,7 @@ pub enum VmssOp {
     Deallocate,
     PowerOff,
     Restart,
+    Delete,
 }
 
 impl VmssOp {
@@ -96,6 +104,7 @@ impl VmssOp {
             VmssOp::Deallocate => "deallocating",
             VmssOp::PowerOff => "powering off",
             VmssOp::Restart => "restarting",
+            VmssOp::Delete => "deleting",
         }
     }
     pub fn as_vm_op(&self) -> VmOp {
@@ -104,6 +113,7 @@ impl VmssOp {
             VmssOp::Deallocate => VmOp::Deallocate,
             VmssOp::PowerOff => VmOp::PowerOff,
             VmssOp::Restart => VmOp::Restart,
+            VmssOp::Delete => VmOp::Delete,
         }
     }
 }
@@ -123,6 +133,7 @@ pub struct VmssTarget {
 pub enum PendingOp {
     Vm(VmOp),
     Vmss { op: VmssOp, scope: VmssScope, is_flex: bool },
+    VmssScale { capacity: i64 },
 }
 
 pub struct PendingConfirm {
@@ -140,14 +151,24 @@ impl PendingConfirm {
                 VmssScope::Selected(targets) => format!("{} {} selected instance(s)",
                     op.as_vm_op().label_short(), targets.len()),
             },
+            PendingOp::VmssScale { capacity } => format!("scale to capacity {capacity}"),
         }
     }
     pub fn verb_ing(&self) -> &'static str {
         match &self.op {
             PendingOp::Vm(o) => o.verb_ing(),
             PendingOp::Vmss { op, .. } => op.verb_ing(),
+            PendingOp::VmssScale { .. } => "scaling",
         }
     }
+}
+
+pub struct CapacityPrompt {
+    pub rg: String,
+    pub vmss: String,
+    pub current_capacity: i64,
+    pub input: String,
+    pub error: Option<String>,
 }
 
 pub struct VmDetailState {
@@ -234,6 +255,7 @@ pub struct App {
     pub vmss_detail: VmssDetailState,
     pub vmss_instance_detail: VmssInstanceDetailState,
     pub pending_confirm: Option<PendingConfirm>,
+    pub capacity_prompt: Option<CapacityPrompt>,
     pub action_in_progress: Option<String>,
     pub help_visible: bool,
     pub status: String,
@@ -254,6 +276,7 @@ impl App {
             vmss_detail: VmssDetailState::new(),
             vmss_instance_detail: VmssInstanceDetailState::new(),
             pending_confirm: None,
+            capacity_prompt: None,
             action_in_progress: None,
             help_visible: false,
             status: String::new(),
@@ -423,13 +446,56 @@ pub async fn handle_action(app: &mut App, action: Action, event_tx: &mpsc::Sende
         Action::VmDeallocate => request_vm_op_current(app, VmOp::Deallocate),
         Action::VmPowerOff => request_vm_op_current(app, VmOp::PowerOff),
         Action::VmRestart => request_vm_op_current(app, VmOp::Restart),
+        Action::VmDelete => request_vm_op_current(app, VmOp::Delete),
         Action::VmssStart => request_vmss_op(app, VmssOp::Start),
         Action::VmssDeallocate => request_vmss_op(app, VmssOp::Deallocate),
         Action::VmssPowerOff => request_vmss_op(app, VmssOp::PowerOff),
         Action::VmssRestart => request_vmss_op(app, VmssOp::Restart),
+        Action::VmssDelete => request_vmss_delete(app),
+        Action::VmssOpenCapacity => open_capacity_prompt(app),
         Action::ConfirmYes | Action::ConfirmNo => {}
     }
     false
+}
+
+fn open_capacity_prompt(app: &mut App) {
+    let (rg, vmss) = match app.current_view() {
+        View::VmssDetail { rg, name } => (rg.clone(), name.clone()),
+        _ => return,
+    };
+    let current = app.vmss_detail.vmss.as_ref()
+        .and_then(|v| v.pointer("/sku/capacity"))
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+    app.capacity_prompt = Some(CapacityPrompt {
+        rg,
+        vmss,
+        current_capacity: current,
+        input: current.to_string(),
+        error: None,
+    });
+}
+
+pub fn submit_capacity_prompt(app: &mut App) {
+    let Some(prompt) = app.capacity_prompt.as_mut() else { return; };
+    let parsed: Result<i64, _> = prompt.input.trim().parse();
+    let capacity = match parsed {
+        Ok(n) if n >= 0 => n,
+        Ok(_) => { prompt.error = Some("capacity must be ≥ 0".into()); return; }
+        Err(_) => { prompt.error = Some("not a number".into()); return; }
+    };
+    if capacity == prompt.current_capacity {
+        app.capacity_prompt = None;
+        return;
+    }
+    let rg = prompt.rg.clone();
+    let vmss = prompt.vmss.clone();
+    app.capacity_prompt = None;
+    app.pending_confirm = Some(PendingConfirm {
+        op: PendingOp::VmssScale { capacity },
+        rg,
+        name: vmss,
+    });
 }
 
 fn toggle_select(app: &mut App) {
@@ -608,6 +674,7 @@ fn vmssop_from_vmop(op: &VmOp) -> VmssOp {
         VmOp::Deallocate => VmssOp::Deallocate,
         VmOp::PowerOff => VmssOp::PowerOff,
         VmOp::Restart => VmssOp::Restart,
+        VmOp::Delete => VmssOp::Delete,
     }
 }
 
@@ -639,6 +706,31 @@ fn request_vmss_op(app: &mut App, op: VmssOp) {
     });
 }
 
+fn request_vmss_delete(app: &mut App) {
+    let (rg, name) = match app.current_view() {
+        View::VmssDetail { rg, name } => (rg.clone(), name.clone()),
+        _ => return,
+    };
+    if app.vmss_detail.selected.is_empty() {
+        app.status = "Select at least one instance with Space before X (delete)".into();
+        return;
+    }
+    let targets: Vec<VmssTarget> = app.vmss_detail.instances.iter()
+        .filter_map(|inst| {
+            let id = inst.get("instanceId").and_then(|v| v.as_str())?;
+            if !app.vmss_detail.selected.contains(id) { return None; }
+            let vm_name = inst.get("name").and_then(|v| v.as_str()).unwrap_or(id).to_string();
+            Some(VmssTarget { instance_id: id.to_string(), vm_name })
+        })
+        .collect();
+    if targets.is_empty() { return; }
+    app.pending_confirm = Some(PendingConfirm {
+        op: PendingOp::Vmss { op: VmssOp::Delete, scope: VmssScope::Selected(targets), is_flex: app.vmss_detail.is_flex },
+        rg,
+        name,
+    });
+}
+
 fn confirm_yes(app: &mut App, event_tx: &mpsc::Sender<Event>) {
     let Some(pc) = app.pending_confirm.take() else { return; };
     app.action_in_progress = Some(format!("{} {}", pc.verb_ing(), pc.name));
@@ -646,6 +738,9 @@ fn confirm_yes(app: &mut App, event_tx: &mpsc::Sender<Event>) {
         PendingOp::Vm(op) => super::data::spawn_vm_action(app, op, pc.rg, pc.name, event_tx.clone()),
         PendingOp::Vmss { op, scope, is_flex } => {
             super::data::spawn_vmss_action(app, op, scope, is_flex, pc.rg, pc.name, event_tx.clone());
+        }
+        PendingOp::VmssScale { capacity } => {
+            super::data::spawn_vmss_scale(app, pc.rg, pc.name, capacity, event_tx.clone());
         }
     }
 }

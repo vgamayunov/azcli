@@ -602,6 +602,10 @@ impl ArmClient {
         self.vmss_action(resource_group, name, "restart", instance_ids).await
     }
 
+    pub async fn vmss_delete_instances(&self, resource_group: &str, name: &str, instance_ids: &[String]) -> Result<()> {
+        self.vmss_action(resource_group, name, "delete", Some(instance_ids)).await
+    }
+
     pub async fn vmss_update_instances(&self, resource_group: &str, name: &str, instance_ids: &[String]) -> Result<()> {
         let url = format!(
             "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Compute/virtualMachineScaleSets/{}/manualupgrade?api-version={}",

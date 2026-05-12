@@ -4,7 +4,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 
-use super::app::{App, ListState, PendingConfirm, View};
+use super::app::{App, CapacityPrompt, ListState, PendingConfirm, View};
 
 pub fn render(f: &mut Frame, app: &App) {
     let area = f.area();
@@ -27,6 +27,10 @@ pub fn render(f: &mut Frame, app: &App) {
 
     if let Some(ref pc) = app.pending_confirm {
         render_confirm(f, area, pc);
+    }
+
+    if let Some(ref prompt) = app.capacity_prompt {
+        render_capacity_prompt(f, area, prompt);
     }
 
     if app.help_visible {
@@ -150,9 +154,10 @@ fn render_footer(f: &mut Frame, area: Rect, app: &App) {
         View::VmssDetail { .. } => {
             let sel = app.vmss_detail.selected.len();
             let scope = if sel == 0 { "ALL".to_string() } else { format!("{sel} selected") };
-            format!("↑↓/jk move  Space select  Enter instance  S/D/O/T → {scope}  Esc back  ? help")
+            let del_hint = if sel == 0 { String::new() } else { format!("  X delete-{sel}") };
+            format!("↑↓/jk move  Space select  Enter instance  S/D/O/T → {scope}{del_hint}  C scale  Esc back  ? help")
         }
-        View::VmssInstanceDetail { .. } => "S start  D deallocate  O power-off  T restart  r refresh  Esc back  ? help".to_string(),
+        View::VmssInstanceDetail { .. } => "S start  D deallocate  O power-off  T restart  X DELETE  r refresh  Esc back  ? help".to_string(),
         View::AccountPicker => "↑↓/jk move  Enter select  r refresh  Esc cancel".to_string(),
     };
     let mut lines = vec![Line::from(Span::styled(hints, Style::default().fg(Color::DarkGray)))];
@@ -572,9 +577,12 @@ VMSS Detail view
   Enter       Open instance detail
   S D O T     Start / Deallocate / PowerOff / Restart
               → selected if any, else ALL instances
+  X           DELETE selected instances (selection required)
+  C           Set capacity (scale)
 
 VMSS Instance Detail view
   S D O T     Same as VM Detail, on this single instance
+  X           DELETE this instance
 ";
     let p = Paragraph::new(body)
         .block(Block::default().borders(Borders::ALL).title(" Help "))
@@ -606,6 +614,40 @@ fn render_confirm(f: &mut Frame, area: Rect, pc: &PendingConfirm) {
     let p = Paragraph::new(body)
         .block(Block::default().borders(Borders::ALL).title(Span::styled(" Confirm ",
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))));
+    f.render_widget(p, rect);
+}
+
+fn render_capacity_prompt(f: &mut Frame, area: Rect, prompt: &CapacityPrompt) {
+    let w = 64u16.min(area.width.saturating_sub(4));
+    let h = 9u16.min(area.height.saturating_sub(4));
+    let x = area.x + (area.width.saturating_sub(w)) / 2;
+    let y = area.y + (area.height.saturating_sub(h)) / 2;
+    let rect = Rect { x, y, width: w, height: h };
+
+    f.render_widget(Clear, rect);
+
+    let mut body: Vec<Line> = Vec::new();
+    body.push(Line::from(""));
+    body.push(Line::from(vec![
+        Span::raw("  "),
+        Span::raw(format!("Set VMSS '{}' capacity (current: {})", prompt.vmss, prompt.current_capacity)),
+    ]));
+    body.push(Line::from(""));
+    body.push(Line::from(vec![
+        Span::raw("  new capacity: "),
+        Span::styled(prompt.input.clone(), Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+        Span::styled("█", Style::default().fg(Color::Green).add_modifier(Modifier::SLOW_BLINK)),
+    ]));
+    if let Some(err) = &prompt.error {
+        body.push(Line::from(Span::styled(format!("  {err}"), Style::default().fg(Color::Red))));
+    } else {
+        body.push(Line::from(Span::styled("  Enter to confirm, Esc to cancel",
+            Style::default().fg(Color::DarkGray))));
+    }
+
+    let p = Paragraph::new(body)
+        .block(Block::default().borders(Borders::ALL).title(Span::styled(" Scale VMSS ",
+            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))));
     f.render_widget(p, rect);
 }
 

@@ -134,6 +134,10 @@ async fn event_loop(
                     app.log_modal = None;
                     continue;
                 }
+                if app.capacity_prompt.is_some() {
+                    handle_capacity_key(app, key);
+                    continue;
+                }
                 if let Some(action) = keys::dispatch(app, key) {
                     if app::handle_action(app, action, event_tx).await {
                         return Ok(());
@@ -168,5 +172,25 @@ async fn event_loop(
                 app.status = msg;
             }
         }
+    }
+}
+
+fn handle_capacity_key(app: &mut App, key: crossterm::event::KeyEvent) {
+    use crossterm::event::KeyCode;
+    let Some(prompt) = app.capacity_prompt.as_mut() else { return; };
+    match key.code {
+        KeyCode::Esc => { app.capacity_prompt = None; }
+        KeyCode::Enter => app::submit_capacity_prompt(app),
+        KeyCode::Backspace => {
+            prompt.input.pop();
+            prompt.error = None;
+        }
+        KeyCode::Char(c) if c.is_ascii_digit() => {
+            if prompt.input.len() < 6 {
+                prompt.input.push(c);
+                prompt.error = None;
+            }
+        }
+        _ => {}
     }
 }
