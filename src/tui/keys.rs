@@ -46,6 +46,23 @@ pub fn dispatch(app: &App, key: KeyEvent) -> Option<Action> {
             (_, KeyCode::Char('T')) => Some(Action::VmRestart),
             (_, KeyCode::Char('?')) | (_, KeyCode::F(1)) => Some(Action::ToggleHelp),
             (_, KeyCode::Char('s')) => Some(Action::OpenAccountPicker),
+            (_, KeyCode::Char('P')) => Some(Action::OpenPimPanel),
+            _ => None,
+        };
+    }
+
+    if matches!(app.current_view(), View::PimPanel) {
+        return match (key.modifiers, key.code) {
+            (KeyModifiers::CONTROL, KeyCode::Char('c')) => Some(Action::Quit),
+            (_, KeyCode::Char('q')) | (_, KeyCode::Esc) => Some(Action::Back),
+            (_, KeyCode::Up) | (_, KeyCode::Char('k')) => Some(Action::Up),
+            (_, KeyCode::Down) | (_, KeyCode::Char('j')) => Some(Action::Down),
+            (_, KeyCode::Home) | (_, KeyCode::Char('g')) => Some(Action::Home),
+            (_, KeyCode::End) | (_, KeyCode::Char('G')) => Some(Action::End),
+            (_, KeyCode::Char('a')) => Some(Action::PimActivate),
+            (_, KeyCode::Char('d')) => Some(Action::PimDeactivate),
+            (_, KeyCode::Char('r')) => Some(Action::Refresh),
+            (_, KeyCode::Char('?')) | (_, KeyCode::F(1)) => Some(Action::ToggleHelp),
             _ => None,
         };
     }
@@ -63,6 +80,7 @@ pub fn dispatch(app: &App, key: KeyEvent) -> Option<Action> {
             (_, KeyCode::Char('X')) => Some(Action::VmDelete),
             (_, KeyCode::Char('?')) | (_, KeyCode::F(1)) => Some(Action::ToggleHelp),
             (_, KeyCode::Char('s')) => Some(Action::OpenAccountPicker),
+            (_, KeyCode::Char('P')) => Some(Action::OpenPimPanel),
             _ => None,
         };
     }
@@ -92,6 +110,7 @@ pub fn dispatch(app: &App, key: KeyEvent) -> Option<Action> {
             (_, KeyCode::Char('C')) => Some(Action::VmssOpenCapacity),
             (_, KeyCode::Char('?')) | (_, KeyCode::F(1)) => Some(Action::ToggleHelp),
             (_, KeyCode::Char('s')) => Some(Action::OpenAccountPicker),
+            (_, KeyCode::Char('P')) => Some(Action::OpenPimPanel),
             _ => None,
         };
     }
@@ -112,6 +131,7 @@ pub fn dispatch(app: &App, key: KeyEvent) -> Option<Action> {
         (_, KeyCode::Char('r')) => Some(Action::Refresh),
         (_, KeyCode::Char('o')) => Some(Action::CycleSort),
         (_, KeyCode::Char('s')) => Some(Action::OpenAccountPicker),
+        (_, KeyCode::Char('P')) => Some(Action::OpenPimPanel),
         (_, KeyCode::Char('?')) | (_, KeyCode::F(1)) => Some(Action::ToggleHelp),
         _ => None,
     }

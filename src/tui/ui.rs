@@ -4,14 +4,14 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 
-use super::app::{App, CapacityPrompt, ListState, PendingConfirm, ResourceSort, RgSort, View};
+use super::app::{App, CapacityPrompt, ListState, PendingConfirm, PimActivatePrompt, PimField, PimPanelState, ResourceSort, RgSort, View};
 
 pub fn render(f: &mut Frame, app: &App) {
     let area = f.area();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),
+            Constraint::Length(header_height(app)),
             Constraint::Min(0),
             Constraint::Length(2),
         ])
@@ -33,6 +33,10 @@ pub fn render(f: &mut Frame, app: &App) {
         render_capacity_prompt(f, area, prompt);
     }
 
+    if let Some(ref prompt) = app.pim_activate_prompt {
+        render_pim_activate_prompt(f, area, prompt);
+    }
+
     if app.help_visible {
         render_help(f, area);
     }
@@ -40,6 +44,34 @@ pub fn render(f: &mut Frame, app: &App) {
     if let Some(ref text) = app.log_modal {
         render_log_modal(f, area, text);
     }
+}
+
+fn header_height(app: &App) -> u16 {
+    if pim_header_line(app).is_some() { 4 } else { 3 }
+}
+
+fn pim_header_line(app: &App) -> Option<Line<'static>> {
+    let s = app.pim_state.as_ref()?;
+    if s.subscription_id != app.subscription_id { return None; }
+    if s.rows.is_empty() { return None; }
+    let active = s.first_active()?;
+    let end = active.active_end?;
+    let now = chrono::Utc::now();
+    let remaining = end.signed_duration_since(now);
+    let total_secs = remaining.num_seconds().max(0);
+    let h = total_secs / 3600;
+    let m = (total_secs % 3600) / 60;
+    let color = if total_secs < 5 * 60 { Color::Red }
+        else if total_secs < 30 * 60 { Color::Yellow }
+        else { Color::Green };
+    let extra = s.active_count().saturating_sub(1);
+    let suffix = if extra > 0 { format!(" (+{extra} more)") } else { String::new() };
+    Some(Line::from(vec![
+        Span::styled("PIM: ", Style::default().fg(Color::DarkGray)),
+        Span::styled(active.role_name.clone(), Style::default().add_modifier(Modifier::BOLD)),
+        Span::raw("  "),
+        Span::styled(format!("active {h}h{m:02}m left{suffix}"), Style::default().fg(color).add_modifier(Modifier::BOLD)),
+    ]))
 }
 
 fn render_header(f: &mut Frame, area: Rect, app: &App) {
@@ -51,6 +83,7 @@ fn render_header(f: &mut Frame, area: Rect, app: &App) {
         View::VmssDetail { rg, name } => format!("VMSS / {rg} / {name}"),
         View::VmssInstanceDetail { rg, vmss, instance_id } => format!("VMSS / {rg} / {vmss} / instance {instance_id}"),
         View::AccountPicker => "Switch Subscription".to_string(),
+        View::PimPanel => "PIM".to_string(),
     };
 
     let line1 = Line::from(vec![
@@ -63,7 +96,12 @@ fn render_header(f: &mut Frame, area: Rect, app: &App) {
         Span::raw(sub_label),
     ]);
 
-    let p = Paragraph::new(vec![line1, line2])
+    let mut lines = vec![line1, line2];
+    if let Some(line3) = pim_header_line(app) {
+        lines.push(line3);
+    }
+
+    let p = Paragraph::new(lines)
         .block(Block::default().borders(Borders::BOTTOM));
     f.render_widget(p, area);
 }
@@ -76,6 +114,7 @@ fn render_body(f: &mut Frame, area: Rect, app: &App) {
         View::VmssDetail { .. } => render_vmss_detail(f, area, app),
         View::VmssInstanceDetail { .. } => render_vmss_instance_detail(f, area, app),
         View::AccountPicker => {}
+        View::PimPanel => render_pim_panel(f, area, app),
     }
 }
 
@@ -165,6 +204,7 @@ fn render_footer(f: &mut Frame, area: Rect, app: &App) {
         }
         View::VmssInstanceDetail { .. } => "S start  D deallocate  O power-off  T restart  X DELETE  r refresh  Esc back  ? help".to_string(),
         View::AccountPicker => "↑↓/jk move  Enter select  r refresh  Esc cancel".to_string(),
+        View::PimPanel => "↑↓/jk move  a activate  d deactivate  r refresh  Esc back".to_string(),
     };
     let mut lines = vec![Line::from(Span::styled(hints, Style::default().fg(Color::DarkGray)))];
     if let Some(ref msg) = app.action_in_progress {
@@ -486,6 +526,129 @@ fn render_vmss_instance_detail(f: &mut Frame, area: Rect, app: &App) {
     f.render_widget(p, area);
 }
 
+fn render_pim_panel(f: &mut Frame, area: Rect, app: &App) {
+    let block = Block::default().borders(Borders::ALL).title("PIM Roles (subscription scope)");
+    let Some(s) = app.pim_state.as_ref() else {
+        f.render_widget(block, area);
+        return;
+    };
+    if s.loading && s.rows.is_empty() {
+        let p = Paragraph::new("Loading PIM roles...").block(block);
+        f.render_widget(p, area);
+        return;
+    }
+    if let Some(err) = &s.error {
+        let p = Paragraph::new(format!("Error: {err}")).block(block).wrap(Wrap { trim: false });
+        f.render_widget(p, area);
+        return;
+    }
+    if s.rows.is_empty() {
+        let p = Paragraph::new("(no eligible or active PIM roles on this subscription)").block(block);
+        f.render_widget(p, area);
+        return;
+    }
+
+    let role_w = s.rows.iter().map(|r| r.role_name.chars().count()).max().unwrap_or(0).clamp(10, 28);
+    let status_w = 14usize;
+    let detail_w = area.width.saturating_sub(2 + role_w as u16 + status_w as u16 + 4) as usize;
+
+    let now = chrono::Utc::now();
+    let capacity = area.height.saturating_sub(2) as usize;
+    let start = s.cursor.saturating_sub(capacity / 2)
+        .min(s.rows.len().saturating_sub(capacity).max(0));
+    let visible: Vec<(usize, &super::app::PimRow)> = s.rows.iter().enumerate().skip(start).take(capacity).collect();
+
+    let items: Vec<ListItem> = visible.iter().map(|(idx, r)| {
+        let (status_span, detail) = if let Some(end) = r.active_end {
+            let remaining = end.signed_duration_since(now);
+            let total = remaining.num_seconds().max(0);
+            let h = total / 3600;
+            let m = (total % 3600) / 60;
+            let color = if total < 5 * 60 { Color::Red }
+                else if total < 30 * 60 { Color::Yellow }
+                else { Color::Green };
+            (
+                Span::styled(pad(&fit("ACTIVE", status_w), status_w), Style::default().fg(color).add_modifier(Modifier::BOLD)),
+                format!("{h}h{m:02}m left"),
+            )
+        } else {
+            (Span::styled(pad(&fit("eligible", status_w), status_w), Style::default().fg(Color::Cyan)), String::new())
+        };
+
+        let row = Line::from(vec![
+            Span::raw(pad(&fit(&r.role_name, role_w), role_w)),
+            Span::raw("  "),
+            status_span,
+            Span::raw("  "),
+            Span::raw(fit(&detail, detail_w)),
+        ]);
+        let style = if *idx == s.cursor {
+            Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
+        ListItem::new(row).style(style)
+    }).collect();
+
+    let widget = List::new(items).block(block);
+    f.render_widget(widget, area);
+}
+
+fn render_pim_activate_prompt(f: &mut Frame, area: Rect, prompt: &PimActivatePrompt) {
+    let w = 72u16.min(area.width.saturating_sub(4));
+    let h = 11u16.min(area.height.saturating_sub(4));
+    let x = area.x + (area.width.saturating_sub(w)) / 2;
+    let y = area.y + (area.height.saturating_sub(h)) / 2;
+    let rect = Rect { x, y, width: w, height: h };
+
+    f.render_widget(Clear, rect);
+
+    let just_label = if prompt.focus == PimField::Justification {
+        Span::styled(format!("{:<14}", "> justification:"), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+    } else {
+        Span::styled(format!("{:<14}", "  justification:"), Style::default().fg(Color::DarkGray))
+    };
+    let dur_label = if prompt.focus == PimField::Duration {
+        Span::styled(format!("{:<14}", "> duration:"), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+    } else {
+        Span::styled(format!("{:<14}", "  duration:"), Style::default().fg(Color::DarkGray))
+    };
+
+    let cursor_mark = |focused: bool| if focused { "█" } else { "" };
+
+    let body = vec![
+        Line::from(""),
+        Line::from(vec![
+            Span::raw("  "),
+            Span::raw(format!("Activate '{}'", prompt.role_name)),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::raw("  "), just_label,
+            Span::raw(prompt.justification.clone()),
+            Span::styled(cursor_mark(prompt.focus == PimField::Justification), Style::default().fg(Color::Cyan)),
+        ]),
+        Line::from(vec![
+            Span::raw("  "), dur_label,
+            Span::raw(prompt.duration.clone()),
+            Span::styled(cursor_mark(prompt.focus == PimField::Duration), Style::default().fg(Color::Cyan)),
+            Span::styled("    (ISO 8601, e.g. PT8H, PT1H30M)", Style::default().fg(Color::DarkGray)),
+        ]),
+        Line::from(""),
+        if let Some(err) = &prompt.error {
+            Line::from(Span::styled(format!("  {err}"), Style::default().fg(Color::Red)))
+        } else {
+            Line::from(Span::styled("  Tab: switch field  Enter: activate  Esc: cancel",
+                Style::default().fg(Color::DarkGray)))
+        },
+    ];
+
+    let p = Paragraph::new(body)
+        .block(Block::default().borders(Borders::ALL).title(Span::styled(" PIM Activate ",
+            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))));
+    f.render_widget(p, rect);
+}
+
 fn render_account_picker(f: &mut Frame, area: Rect, app: &App) {
     let w = area.width.saturating_sub(8).max(60).min(120);
     let h = area.height.saturating_sub(4).max(8);
@@ -547,8 +710,8 @@ fn render_account_picker(f: &mut Frame, area: Rect, app: &App) {
 }
 
 fn render_help(f: &mut Frame, area: Rect) {
-    let w = 70u16.min(area.width.saturating_sub(4));
-    let h = 38u16.min(area.height.saturating_sub(4));
+    let w = 72u16.min(area.width.saturating_sub(4));
+    let h = 42u16.min(area.height.saturating_sub(4));
     let x = area.x + (area.width.saturating_sub(w)) / 2;
     let y = area.y + (area.height.saturating_sub(h)) / 2;
     let rect = Rect { x, y, width: w, height: h };
@@ -571,6 +734,7 @@ Actions
               · RGs:       name → location
               · Resources: name → type → location
   s           Switch subscription
+  P           Open PIM panel for current subscription
   ?  F1       Toggle this help
   q  Ctrl-C   Quit
 
@@ -592,6 +756,10 @@ VMSS Detail view
 VMSS Instance Detail view
   S D O T     Same as VM Detail, on this single instance
   X           DELETE this instance
+
+PIM Panel
+  a           Activate eligible role (justification/duration prompt)
+  d           Deactivate active role (confirm)
 ";
     let p = Paragraph::new(body)
         .block(Block::default().borders(Borders::ALL).title(" Help "))

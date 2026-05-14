@@ -16,6 +16,7 @@ pub enum View {
     VmssDetail { rg: String, name: String },
     VmssInstanceDetail { rg: String, vmss: String, instance_id: String },
     AccountPicker,
+    PimPanel,
 }
 
 pub enum Action {
@@ -46,6 +47,14 @@ pub enum Action {
     VmssRestart,
     VmssDelete,
     VmssOpenCapacity,
+    OpenPimPanel,
+    PimActivate,
+    PimDeactivate,
+    PimSubmitActivate,
+    PimCancelActivate,
+    PimTabField,
+    PimInputChar(char),
+    PimInputBackspace,
     ConfirmYes,
     ConfirmNo,
 }
@@ -180,6 +189,7 @@ pub enum PendingOp {
     Vm(VmOp),
     Vmss { op: VmssOp, scope: VmssScope, is_flex: bool },
     VmssScale { capacity: i64 },
+    PimDeactivate { role_name: String, role_scope: String },
 }
 
 pub struct PendingConfirm {
@@ -198,6 +208,7 @@ impl PendingConfirm {
                     op.as_vm_op().label_short(), targets.len()),
             },
             PendingOp::VmssScale { capacity } => format!("scale to capacity {capacity}"),
+            PendingOp::PimDeactivate { role_name, .. } => format!("deactivate PIM role '{role_name}'"),
         }
     }
     pub fn verb_ing(&self) -> &'static str {
@@ -205,6 +216,7 @@ impl PendingConfirm {
             PendingOp::Vm(o) => o.verb_ing(),
             PendingOp::Vmss { op, .. } => op.verb_ing(),
             PendingOp::VmssScale { .. } => "scaling",
+            PendingOp::PimDeactivate { .. } => "deactivating PIM",
         }
     }
 }
@@ -214,6 +226,57 @@ pub struct CapacityPrompt {
     pub vmss: String,
     pub current_capacity: i64,
     pub input: String,
+    pub error: Option<String>,
+}
+
+pub struct PimRow {
+    pub role_name: String,
+    pub role_definition_id: String,
+    pub eligibility_schedule_id: String,
+    pub scope: String,
+    pub is_eligible: bool,
+    pub active_end: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+pub struct PimPanelState {
+    pub subscription_id: String,
+    pub rows: Vec<PimRow>,
+    pub cursor: usize,
+    pub loading: bool,
+    pub error: Option<String>,
+    pub last_fetched: Option<std::time::Instant>,
+}
+
+impl PimPanelState {
+    pub fn new(subscription_id: String) -> Self {
+        Self {
+            subscription_id,
+            rows: Vec::new(),
+            cursor: 0,
+            loading: true,
+            error: None,
+            last_fetched: None,
+        }
+    }
+    pub fn active_count(&self) -> usize {
+        self.rows.iter().filter(|r| r.active_end.is_some()).count()
+    }
+    pub fn first_active(&self) -> Option<&PimRow> {
+        self.rows.iter().find(|r| r.active_end.is_some())
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum PimField { Justification, Duration }
+
+pub struct PimActivatePrompt {
+    pub role_name: String,
+    pub role_definition_id: String,
+    pub eligibility_schedule_id: String,
+    pub role_scope: String,
+    pub justification: String,
+    pub duration: String,
+    pub focus: PimField,
     pub error: Option<String>,
 }
 
@@ -304,6 +367,8 @@ pub struct App {
     pub vmss_instance_detail: VmssInstanceDetailState,
     pub pending_confirm: Option<PendingConfirm>,
     pub capacity_prompt: Option<CapacityPrompt>,
+    pub pim_state: Option<PimPanelState>,
+    pub pim_activate_prompt: Option<PimActivatePrompt>,
     pub action_in_progress: Option<String>,
     pub help_visible: bool,
     pub status: String,
@@ -327,6 +392,8 @@ impl App {
             vmss_instance_detail: VmssInstanceDetailState::new(),
             pending_confirm: None,
             capacity_prompt: None,
+            pim_state: None,
+            pim_activate_prompt: None,
             action_in_progress: None,
             help_visible: false,
             status: String::new(),
@@ -356,6 +423,7 @@ impl App {
             View::VmDetail { .. } => None,
             View::VmssDetail { .. } => None,
             View::VmssInstanceDetail { .. } => None,
+            View::PimPanel => None,
         }
     }
 
@@ -427,6 +495,17 @@ impl App {
                     }
                 }
             }
+            FetchPayload::PimRoles { subscription_id, eligible, active } => {
+                if self.pim_state.as_ref().map(|p| p.subscription_id == subscription_id).unwrap_or(false) {
+                    let rows = build_pim_rows(eligible, active);
+                    let s = self.pim_state.as_mut().unwrap();
+                    if s.cursor >= rows.len() { s.cursor = 0; }
+                    s.rows = rows;
+                    s.loading = false;
+                    s.error = None;
+                    s.last_fetched = Some(std::time::Instant::now());
+                }
+            }
         }
     }
 
@@ -454,6 +533,12 @@ impl App {
             }
             View::VmssInstanceDetail { .. } => {
                 self.vmss_instance_detail.error = Some(msg);
+            }
+            View::PimPanel => {
+                if let Some(p) = self.pim_state.as_mut() {
+                    p.loading = false;
+                    p.error = Some(msg);
+                }
             }
         }
     }
@@ -506,6 +591,14 @@ pub async fn handle_action(app: &mut App, action: Action, event_tx: &mpsc::Sende
         Action::VmssRestart => request_vmss_op(app, VmssOp::Restart),
         Action::VmssDelete => request_vmss_delete(app),
         Action::VmssOpenCapacity => open_capacity_prompt(app),
+        Action::OpenPimPanel => open_pim_panel(app, event_tx),
+        Action::PimActivate => open_pim_activate_prompt(app),
+        Action::PimDeactivate => request_pim_deactivate(app),
+        Action::PimSubmitActivate => submit_pim_activate(app, event_tx),
+        Action::PimCancelActivate => { app.pim_activate_prompt = None; }
+        Action::PimTabField => pim_tab_field(app),
+        Action::PimInputChar(c) => pim_input_char(app, c),
+        Action::PimInputBackspace => pim_input_backspace(app),
         Action::ConfirmYes | Action::ConfirmNo => {}
     }
     false
@@ -597,6 +690,65 @@ pub fn sort_rgs(items: &mut [serde_json::Value], key: RgSort) {
     });
 }
 
+pub fn build_pim_rows(eligible: Vec<serde_json::Value>, active: Vec<serde_json::Value>) -> Vec<PimRow> {
+    use std::collections::HashMap;
+    let active_map: HashMap<String, chrono::DateTime<chrono::Utc>> = active.iter()
+        .filter_map(|a| {
+            let rid = a.get("roleDefinitionId").and_then(|v| v.as_str())?.to_string();
+            let end_str = a.get("endDateTime").and_then(|v| v.as_str())?;
+            let end = chrono::DateTime::parse_from_rfc3339(end_str).ok()?.with_timezone(&chrono::Utc);
+            Some((rid, end))
+        })
+        .collect();
+
+    let mut rows: Vec<PimRow> = Vec::new();
+    let mut seen_role_defs: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for e in eligible.iter() {
+        let role_name = e.get("roleName").and_then(|v| v.as_str()).unwrap_or("?").to_string();
+        let role_definition_id = e.get("roleDefinitionId").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let eligibility_schedule_id = e.get("eligibilityScheduleId").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let scope = e.get("scope").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let active_end = active_map.get(&role_definition_id).copied();
+        seen_role_defs.insert(role_definition_id.clone());
+        rows.push(PimRow {
+            role_name,
+            role_definition_id,
+            eligibility_schedule_id,
+            scope,
+            is_eligible: true,
+            active_end,
+        });
+    }
+
+    for a in active.iter() {
+        let role_definition_id = a.get("roleDefinitionId").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        if seen_role_defs.contains(&role_definition_id) { continue; }
+        let role_name = a.get("roleName").and_then(|v| v.as_str()).unwrap_or("?").to_string();
+        let scope = a.get("scope").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let end_str = a.get("endDateTime").and_then(|v| v.as_str()).unwrap_or("");
+        let active_end = chrono::DateTime::parse_from_rfc3339(end_str).ok().map(|d| d.with_timezone(&chrono::Utc));
+        rows.push(PimRow {
+            role_name,
+            role_definition_id,
+            eligibility_schedule_id: String::new(),
+            scope,
+            is_eligible: false,
+            active_end,
+        });
+    }
+
+    rows.sort_by(|a, b| {
+        match (a.active_end.is_some(), b.active_end.is_some()) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.role_name.to_ascii_lowercase().cmp(&b.role_name.to_ascii_lowercase()),
+        }
+    });
+
+    rows
+}
+
 pub fn sort_resources(items: &mut [serde_json::Value], key: ResourceSort) {
     let field = match key {
         ResourceSort::Name => "name",
@@ -620,6 +772,12 @@ fn up_action(app: &mut App) {
         if app.vmss_detail.cursor > 0 { app.vmss_detail.cursor -= 1; }
         return;
     }
+    if matches!(app.current_view(), View::PimPanel) {
+        if let Some(p) = app.pim_state.as_mut() {
+            if p.cursor > 0 { p.cursor -= 1; }
+        }
+        return;
+    }
     if let Some(l) = app.current_list_mut() { l.move_by(-1); }
 }
 
@@ -627,6 +785,12 @@ fn down_action(app: &mut App) {
     if matches!(app.current_view(), View::VmssDetail { .. }) {
         if app.vmss_detail.cursor + 1 < app.vmss_detail.instances.len() {
             app.vmss_detail.cursor += 1;
+        }
+        return;
+    }
+    if matches!(app.current_view(), View::PimPanel) {
+        if let Some(p) = app.pim_state.as_mut() {
+            if p.cursor + 1 < p.rows.len() { p.cursor += 1; }
         }
         return;
     }
@@ -638,6 +802,10 @@ fn home_action(app: &mut App) {
         app.vmss_detail.cursor = 0;
         return;
     }
+    if matches!(app.current_view(), View::PimPanel) {
+        if let Some(p) = app.pim_state.as_mut() { p.cursor = 0; }
+        return;
+    }
     if let Some(l) = app.current_list_mut() { l.cursor = 0; }
 }
 
@@ -645,6 +813,12 @@ fn end_action(app: &mut App) {
     if matches!(app.current_view(), View::VmssDetail { .. }) {
         if !app.vmss_detail.instances.is_empty() {
             app.vmss_detail.cursor = app.vmss_detail.instances.len() - 1;
+        }
+        return;
+    }
+    if matches!(app.current_view(), View::PimPanel) {
+        if let Some(p) = app.pim_state.as_mut() {
+            if !p.rows.is_empty() { p.cursor = p.rows.len() - 1; }
         }
         return;
     }
@@ -691,6 +865,7 @@ fn enter(app: &mut App, event_tx: &mpsc::Sender<Event>) {
         View::VmDetail { .. } => {}
         View::VmssInstanceDetail { .. } => {}
         View::AccountPicker => {}
+        View::PimPanel => {}
     }
 }
 
@@ -706,6 +881,7 @@ fn back(app: &mut App) {
                 app.pop_view();
             }
         }
+        View::PimPanel => app.pop_view(),
         View::ResourcesInGroup { .. } => app.pop_view(),
         View::ResourceGroups => {}
     }
@@ -747,6 +923,13 @@ fn refresh(app: &mut App, event_tx: &mpsc::Sender<Event>) {
         View::AccountPicker => {
             app.subs_list = ListState::new();
             super::data::spawn_fetch_subscriptions(app, event_tx.clone());
+        }
+        View::PimPanel => {
+            if let Some(p) = app.pim_state.as_mut() {
+                p.loading = true;
+                p.error = None;
+            }
+            super::data::spawn_fetch_pim(app, app.subscription_id.clone(), event_tx.clone());
         }
     }
 }
@@ -849,7 +1032,134 @@ fn confirm_yes(app: &mut App, event_tx: &mpsc::Sender<Event>) {
         PendingOp::VmssScale { capacity } => {
             super::data::spawn_vmss_scale(app, pc.rg, pc.name, capacity, event_tx.clone());
         }
+        PendingOp::PimDeactivate { role_name, role_scope } => {
+            super::data::spawn_pim_deactivate(app, role_name, role_scope, event_tx.clone());
+        }
     }
+}
+
+fn open_pim_panel(app: &mut App, event_tx: &mpsc::Sender<Event>) {
+    if matches!(app.current_view(), View::PimPanel) { return; }
+    if app.pim_state.is_none() || app.pim_state.as_ref().map(|p| p.subscription_id != app.subscription_id).unwrap_or(false) {
+        app.pim_state = Some(PimPanelState::new(app.subscription_id.clone()));
+    }
+    app.push_view(View::PimPanel);
+    super::data::spawn_fetch_pim(app, app.subscription_id.clone(), event_tx.clone());
+}
+
+fn open_pim_activate_prompt(app: &mut App) {
+    let Some(p) = app.pim_state.as_ref() else { return; };
+    let Some(row) = p.rows.get(p.cursor) else { return; };
+    if !row.is_eligible {
+        app.status = "row is not eligible for activation".into();
+        return;
+    }
+    if row.active_end.is_some() {
+        app.status = "role already active; press 'd' to deactivate first".into();
+        return;
+    }
+    app.pim_activate_prompt = Some(PimActivatePrompt {
+        role_name: row.role_name.clone(),
+        role_definition_id: row.role_definition_id.clone(),
+        eligibility_schedule_id: row.eligibility_schedule_id.clone(),
+        role_scope: row.scope.clone(),
+        justification: "az cli".into(),
+        duration: "PT8H".into(),
+        focus: PimField::Duration,
+        error: None,
+    });
+}
+
+fn request_pim_deactivate(app: &mut App) {
+    let Some(p) = app.pim_state.as_ref() else { return; };
+    let Some(row) = p.rows.get(p.cursor) else { return; };
+    if row.active_end.is_none() {
+        app.status = "row is not currently active".into();
+        return;
+    }
+    app.pending_confirm = Some(PendingConfirm {
+        op: PendingOp::PimDeactivate {
+            role_name: row.role_name.clone(),
+            role_scope: row.scope.clone(),
+        },
+        rg: String::new(),
+        name: row.role_name.clone(),
+    });
+}
+
+fn submit_pim_activate(app: &mut App, event_tx: &mpsc::Sender<Event>) {
+    let Some(prompt) = app.pim_activate_prompt.as_ref() else { return; };
+    if prompt.justification.trim().is_empty() {
+        if let Some(p) = app.pim_activate_prompt.as_mut() {
+            p.error = Some("justification cannot be empty".into());
+        }
+        return;
+    }
+    if !is_iso8601_duration(&prompt.duration) {
+        if let Some(p) = app.pim_activate_prompt.as_mut() {
+            p.error = Some("duration must be ISO 8601 like PT8H".into());
+        }
+        return;
+    }
+    let role_name = prompt.role_name.clone();
+    let justification = prompt.justification.clone();
+    let duration = prompt.duration.clone();
+    let role_scope = prompt.role_scope.clone();
+    app.pim_activate_prompt = None;
+    app.action_in_progress = Some(format!("activating PIM role '{role_name}'"));
+    super::data::spawn_pim_activate(app, role_name, justification, duration, role_scope, event_tx.clone());
+}
+
+fn pim_tab_field(app: &mut App) {
+    if let Some(p) = app.pim_activate_prompt.as_mut() {
+        p.focus = match p.focus {
+            PimField::Justification => PimField::Duration,
+            PimField::Duration => PimField::Justification,
+        };
+    }
+}
+
+fn pim_input_char(app: &mut App, c: char) {
+    if let Some(p) = app.pim_activate_prompt.as_mut() {
+        match p.focus {
+            PimField::Justification => {
+                if c.is_ascii() && !c.is_ascii_control() && p.justification.len() < 200 {
+                    p.justification.push(c);
+                    p.error = None;
+                }
+            }
+            PimField::Duration => {
+                if (c.is_ascii_alphanumeric() || c == 'T' || c == 'P' || c == 'H' || c == 'M') && p.duration.len() < 16 {
+                    p.duration.push(c);
+                    p.error = None;
+                }
+            }
+        }
+    }
+}
+
+fn pim_input_backspace(app: &mut App) {
+    if let Some(p) = app.pim_activate_prompt.as_mut() {
+        match p.focus {
+            PimField::Justification => { p.justification.pop(); p.error = None; }
+            PimField::Duration => { p.duration.pop(); p.error = None; }
+        }
+    }
+}
+
+fn is_iso8601_duration(s: &str) -> bool {
+    let s = s.trim();
+    if !s.starts_with("PT") || s.len() < 3 { return false; }
+    let body = &s[2..];
+    let mut chars = body.chars();
+    let mut has_digit = false;
+    let mut has_unit = false;
+    while let Some(c) = chars.next() {
+        if c.is_ascii_digit() { has_digit = true; }
+        else if c == 'H' || c == 'M' || c == 'S' { if !has_digit { return false; } has_unit = true; has_digit = false; }
+        else { return false; }
+    }
+    has_unit
 }
 
 fn open_account_picker(app: &mut App, event_tx: &mpsc::Sender<Event>) {
@@ -922,5 +1232,6 @@ async fn select_account(app: &mut App, event_tx: &mpsc::Sender<Event>) {
     app.subscription_id = new_sub_id;
     app.pop_view();
     app.clear_caches();
+    app.pim_state = None;
     super::data::spawn_fetch_rgs(app, event_tx.clone());
 }

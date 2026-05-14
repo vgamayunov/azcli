@@ -13,6 +13,10 @@ pub fn spawn_fetch_current(app: &App, tx: mpsc::Sender<Event>) {
         View::VmDetail { rg, name } => spawn_fetch_vm_detail(app, rg.clone(), name.clone(), tx),
         View::VmssDetail { rg, name } => spawn_fetch_vmss_detail(app, rg.clone(), name.clone(), tx),
         View::VmssInstanceDetail { rg, vmss, .. } => spawn_fetch_vmss_detail(app, rg.clone(), vmss.clone(), tx),
+        View::PimPanel => {
+            let sub = app.subscription_id.clone();
+            spawn_fetch_pim(app, sub, tx);
+        }
     }
 }
 
@@ -270,6 +274,50 @@ pub fn spawn_fetch_subscriptions(app: &App, tx: mpsc::Sender<Event>) {
             }
             Err(e) => {
                 let _ = tx.send(Event::FetchErr(format!("{e:#}"))).await;
+            }
+        }
+    });
+}
+
+pub fn spawn_fetch_pim(app: &App, subscription_id: String, tx: mpsc::Sender<Event>) {
+    let client = app.client.clone();
+    tokio::spawn(async move {
+        match crate::commands::role::pim::list::execute(&client, None, None).await {
+            Ok(value) => {
+                let eligible = value.get("eligible").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+                let active = value.get("active").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+                let _ = tx.send(Event::FetchOk(FetchPayload::PimRoles { subscription_id, eligible, active })).await;
+            }
+            Err(e) => {
+                let _ = tx.send(Event::FetchErr(format!("{e:#}"))).await;
+            }
+        }
+    });
+}
+
+pub fn spawn_pim_activate(app: &App, role_name: String, justification: String, duration: String, _role_scope: String, tx: mpsc::Sender<Event>) {
+    let client = app.client.clone();
+    tokio::spawn(async move {
+        match crate::commands::role::pim::activate::execute(&client, &role_name, &justification, &duration, None, None).await {
+            Ok(_) => {
+                let _ = tx.send(Event::ActionOk(format!("PIM '{role_name}' activate accepted"))).await;
+            }
+            Err(e) => {
+                let _ = tx.send(Event::ActionErr(format!("PIM '{role_name}' activate failed: {e:#}"))).await;
+            }
+        }
+    });
+}
+
+pub fn spawn_pim_deactivate(app: &App, role_name: String, _role_scope: String, tx: mpsc::Sender<Event>) {
+    let client = app.client.clone();
+    tokio::spawn(async move {
+        match crate::commands::role::pim::deactivate::execute(&client, &role_name, None, None).await {
+            Ok(_) => {
+                let _ = tx.send(Event::ActionOk(format!("PIM '{role_name}' deactivate accepted"))).await;
+            }
+            Err(e) => {
+                let _ = tx.send(Event::ActionErr(format!("PIM '{role_name}' deactivate failed: {e:#}"))).await;
             }
         }
     });

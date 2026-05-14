@@ -138,6 +138,10 @@ async fn event_loop(
                     handle_capacity_key(app, key);
                     continue;
                 }
+                if app.pim_activate_prompt.is_some() {
+                    handle_pim_activate_key(app, key, event_tx).await;
+                    continue;
+                }
                 if let Some(action) = keys::dispatch(app, key) {
                     if app::handle_action(app, action, event_tx).await {
                         return Ok(());
@@ -145,7 +149,19 @@ async fn event_loop(
                 }
             }
             Event::Resize => {}
-            Event::Tick => {}
+            Event::Tick => {
+                let should_refresh = app.pim_state.as_ref()
+                    .and_then(|p| p.last_fetched.map(|t| t.elapsed() >= std::time::Duration::from_secs(60)))
+                    .unwrap_or(false);
+                let pim_sub_matches = app.pim_state.as_ref()
+                    .map(|p| p.subscription_id == app.subscription_id)
+                    .unwrap_or(false);
+                if should_refresh && pim_sub_matches {
+                    if let Some(p) = app.pim_state.as_mut() { p.last_fetched = Some(std::time::Instant::now()); }
+                    let sub = app.subscription_id.clone();
+                    data::spawn_fetch_pim(app, sub, event_tx.clone());
+                }
+            }
             Event::FetchOk(payload) => app.apply_fetch(payload),
             Event::FetchErr(err) => app.apply_error(err),
             Event::ActionOk(msg) => {
@@ -163,6 +179,11 @@ async fn event_loop(
                     app::View::VmssInstanceDetail { rg, vmss, .. } => {
                         app.vmss_detail.loading = true;
                         data::spawn_fetch_vmss_detail(app, rg, vmss, event_tx.clone());
+                    }
+                    app::View::PimPanel => {
+                        if let Some(p) = app.pim_state.as_mut() { p.loading = true; }
+                        let sub = app.subscription_id.clone();
+                        data::spawn_fetch_pim(app, sub, event_tx.clone());
                     }
                     _ => {}
                 }
@@ -191,6 +212,18 @@ fn handle_capacity_key(app: &mut App, key: crossterm::event::KeyEvent) {
                 prompt.error = None;
             }
         }
+        _ => {}
+    }
+}
+
+async fn handle_pim_activate_key(app: &mut App, key: crossterm::event::KeyEvent, event_tx: &tokio::sync::mpsc::Sender<Event>) {
+    use crossterm::event::KeyCode;
+    match key.code {
+        KeyCode::Esc => { app::handle_action(app, app::Action::PimCancelActivate, event_tx).await; }
+        KeyCode::Enter => { app::handle_action(app, app::Action::PimSubmitActivate, event_tx).await; }
+        KeyCode::Tab | KeyCode::BackTab => { app::handle_action(app, app::Action::PimTabField, event_tx).await; }
+        KeyCode::Backspace => { app::handle_action(app, app::Action::PimInputBackspace, event_tx).await; }
+        KeyCode::Char(c) => { app::handle_action(app, app::Action::PimInputChar(c), event_tx).await; }
         _ => {}
     }
 }
